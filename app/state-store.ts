@@ -60,7 +60,14 @@ function remap(data: Record<string, any>, index: number) {
       ...po,
       id: add(po.id, offset),
       supplierId: add(po.supplierId, offset),
-      items: (po.items || []).map(mapItem),
+      items: (po.items || []).map((item: any) => ({
+        ...mapItem(item),
+        allocations: (item.allocations || []).map((allocation: any) => ({
+          ...allocation,
+          prId: add(allocation.prId, offset),
+          prItemId: add(allocation.prItemId, offset),
+        })),
+      })),
       docs: (po.docs || []).map((d: any) => ({ ...d, id: add(d.id, offset) })),
       payments: (po.payments || []).map((p: any) => ({
         ...p,
@@ -88,7 +95,7 @@ export async function readAllWorkspaces() {
     remap(JSON.parse(row.payload), index),
   );
   const combined: Record<string, any> = {
-    prs: [], products: [], suppliers: [], quotes: {}, pos: [], items: [], quoteSupplierIds: [], hiddenContractIds: [], trash: [],
+    prs: [], products: [], suppliers: [], quotes: {}, pos: [], items: [], quoteSupplierIds: [], hiddenContractIds: [], trash: [], poCart: [],
   };
   for (const part of parts) {
     combined.prs.push(...part.prs);

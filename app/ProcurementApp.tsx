@@ -87,11 +87,25 @@ type PR = {
   items: Item[];
   status: string;
 };
+type POAllocation = {
+  prId: number;
+  prNumber: string;
+  prItemId: number;
+  qty: number;
+};
 type POItem = Item & {
   price: number;
   deliveryStatus: "Chưa giao" | "Giao một phần" | "Đã giao";
   deliveredQty: number;
   deliveryDate: string;
+  allocations?: POAllocation[];
+};
+type POCartLine = {
+  id: string;
+  item: Item;
+  supplierId: number;
+  price: number;
+  allocation: POAllocation;
 };
 type PODoc = {
   id: number;
@@ -162,6 +176,7 @@ type StoredState = {
   quoteSupplierIds: number[];
   trash: TrashItem[];
   hiddenContractIds: number[];
+  poCart: POCartLine[];
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -298,6 +313,8 @@ export default function ProcurementApp({
   const [poSelections, setPoSelections] = useState<number[]>([]),
     [pos, setPos] = useState<PO[]>(pos0),
     [currentPO, setCurrentPO] = useState<PO>(emptyPO);
+  const [poCart, setPoCart] = useState<POCartLine[]>([]),
+    [poCartOpen, setPoCartOpen] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]),
     [hiddenContractIds, setHiddenContractIds] = useState<number[]>([]),
     [deleteTarget, setDeleteTarget] = useState<{
@@ -345,6 +362,7 @@ export default function ProcurementApp({
         quoteSupplierIds,
         trash,
         hiddenContractIds,
+        poCart,
       },
     });
   const persistState = useCallback(async (keepalive = false) => {
@@ -389,9 +407,10 @@ export default function ProcurementApp({
         quoteSupplierIds,
         trash,
         hiddenContractIds,
+        poCart,
       },
     };
-  }, [hiddenContractIds, items, pos, products, prs, quoteSupplierIds, quotes, suppliers, trash, workspaceId]);
+  }, [hiddenContractIds, items, poCart, pos, products, prs, quoteSupplierIds, quotes, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -434,6 +453,7 @@ export default function ProcurementApp({
             ),
           );
           setHiddenContractIds(data.hiddenContractIds || []);
+          setPoCart(data.poCart || []);
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
         } else {
@@ -446,6 +466,7 @@ export default function ProcurementApp({
           setQuoteSupplierIds([]);
           setTrash([]);
           setHiddenContractIds([]);
+          setPoCart([]);
           setSelectedPR(emptyPR);
           setCurrentPO(emptyPO);
         }
@@ -473,6 +494,7 @@ export default function ProcurementApp({
     quoteSupplierIds,
     trash,
     hiddenContractIds,
+    poCart,
     workspaceId,
     persistState,
   ]);
@@ -543,6 +565,7 @@ export default function ProcurementApp({
           quoteSupplierIds,
           trash,
           hiddenContractIds,
+          poCart,
         }),
       });
     } catch {}
@@ -697,6 +720,11 @@ export default function ProcurementApp({
     setSelectedPR(pr);
     setItems(pr.items);
     setQuotes(pr.id === 1 ? quotes0 : {});
+    setPoSelections(
+      poCart
+        .filter((line) => line.allocation.prId === pr.id)
+        .map((line) => line.allocation.prItemId),
+    );
     setView("compare");
   };
   const savePR = () => {
@@ -810,39 +838,116 @@ export default function ProcurementApp({
     setSelectedSupplierId("");
     setSupplierPicker(false);
   };
-  const togglePOItem = (id: number) =>
-    setPoSelections((selected) => {
-      if (selected.includes(id)) return selected.filter((x) => x !== id);
-      const supplierId = best(id)?.supplier.id;
-      if (!supplierId) return selected;
-      const firstSupplier = selected.length
-        ? best(selected[0])?.supplier.id
-        : null;
-      return firstSupplier && firstSupplier !== supplierId
-        ? [id]
-        : [...selected, id];
-    });
+  const orderedQty = (
+    prId: number,
+    prNumber: string,
+    prItemId: number,
+    code: string,
+  ) =>
+    pos.reduce(
+      (sum, po) =>
+        sum +
+        po.items.reduce(
+          (itemSum, item) =>
+            itemSum +
+            (item.allocations?.length
+              ? item.allocations
+                  .filter(
+                    (allocation) =>
+                      allocation.prId === prId &&
+                      allocation.prItemId === prItemId,
+                  )
+                  .reduce((n, allocation) => n + allocation.qty, 0)
+              : po.prNumber === prNumber && item.code === code
+                ? item.qty
+                : 0),
+          0,
+        ),
+      0,
+    );
+  const togglePOItem = (id: number) => {
+    const existing = poCart.find(
+      (line) =>
+        line.allocation.prId === selectedPR.id &&
+        line.allocation.prItemId === id,
+    );
+    if (existing) {
+      setPoCart((cart) => cart.filter((line) => line.id !== existing.id));
+      setPoSelections((selected) => selected.filter((itemId) => itemId !== id));
+      return;
+    }
+    const item = items.find((row) => row.id === id),
+      winner = best(id);
+    if (!item || !winner) return;
+    if (poCart.length && poCart[0].supplierId !== winner.supplier.id) {
+      setStorageStatus(
+        `Giỏ PO đang thuộc ${suppliers.find((s) => s.id === poCart[0].supplierId)?.name}. Hãy phát hành hoặc làm trống giỏ trước.`,
+      );
+      return;
+    }
+    const remaining = Math.max(
+      0,
+      item.qty - orderedQty(selectedPR.id, selectedPR.number, item.id, item.code),
+    );
+    if (!remaining) {
+      setStorageStatus(`${item.code} đã được đặt đủ số lượng`);
+      return;
+    }
+    setPoCart((cart) => [
+      ...cart,
+      {
+        id: `${selectedPR.id}:${item.id}`,
+        item: { ...item },
+        supplierId: winner.supplier.id,
+        price: winner.price,
+        allocation: {
+          prId: selectedPR.id,
+          prNumber: selectedPR.number,
+          prItemId: item.id,
+          qty: remaining,
+        },
+      },
+    ]);
+    setPoSelections((selected) => [...selected, id]);
+  };
   const createPO = () => {
-    if (!poSelections.length) return;
-    const supplier = best(poSelections[0])?.supplier;
+    if (!poCart.length) return;
+    const supplier = suppliers.find((s) => s.id === poCart[0].supplierId);
     if (!supplier) return;
+    const grouped = new Map<string, POItem>();
+    poCart.forEach((line, index) => {
+      const key = `${line.item.code}|${line.item.spec}|${line.item.unit}|${line.price}`,
+        existing = grouped.get(key);
+      if (existing) {
+        existing.qty += line.allocation.qty;
+        existing.allocations = [
+          ...(existing.allocations || []),
+          line.allocation,
+        ];
+      } else {
+        grouped.set(key, {
+          ...line.item,
+          id: Date.now() + index,
+          qty: line.allocation.qty,
+          price: line.price,
+          allocations: [line.allocation],
+          deliveryStatus: "Chưa giao",
+          deliveredQty: 0,
+          deliveryDate: "",
+        });
+      }
+    });
+    const sourcePRs = [...new Set(poCart.map((line) => line.allocation.prNumber))];
     const po: PO = {
       id: Date.now(),
       number: `PO-${new Date().getFullYear()}-${String(pos.length + 1).padStart(4, "0")}`,
-      prNumber: selectedPR.number,
+      prNumber:
+        sourcePRs.length === 1 ? sourcePRs[0] : `Nhiều PR (${sourcePRs.length})`,
       supplierId: supplier.id,
       createdDate: new Date().toISOString().slice(0, 10),
       expectedDate: "",
       status: "Mới tạo",
-      items: items
-        .filter((i) => poSelections.includes(i.id))
-        .map((i) => ({
-          ...i,
-          price: Number(quotes[i.id]?.[supplier.id]?.price) || 0,
-          deliveryStatus: "Chưa giao",
-          deliveredQty: 0,
-          deliveryDate: "",
-        })),
+      items: [...grouped.values()],
       docs: [
         {
           id: Date.now(),
@@ -889,8 +994,37 @@ export default function ProcurementApp({
       amount: (total * p.percent) / 100,
     }));
     setPos((p) => [po, ...p]);
+    setPrs((list) =>
+      list.map((pr) => {
+        const total = pr.items.reduce((sum, item) => sum + item.qty, 0),
+          ordered = pr.items.reduce(
+            (sum, item) =>
+              sum +
+              orderedQty(pr.id, pr.number, item.id, item.code) +
+              poCart
+                .filter(
+                  (line) =>
+                    line.allocation.prId === pr.id &&
+                    line.allocation.prItemId === item.id,
+                )
+                .reduce((n, line) => n + line.allocation.qty, 0),
+            0,
+          );
+        return {
+          ...pr,
+          status:
+            ordered >= total
+              ? "Đã tạo đủ PO"
+              : ordered > 0
+                ? "Đã tạo PO một phần"
+                : pr.status,
+        };
+      }),
+    );
     setCurrentPO(po);
     setPoSelections([]);
+    setPoCart([]);
+    setPoCartOpen(false);
     setView("po-detail");
   };
   const updatePO = (po: PO) => {
@@ -1213,10 +1347,10 @@ export default function ProcurementApp({
                 </button>
                 <button
                   className="po-create-btn"
-                  disabled={!poSelections.length}
-                  onClick={createPO}
+                  disabled={!poCart.length}
+                  onClick={() => setPoCartOpen(true)}
                 >
-                  Tạo PO ({poSelections.length})
+                  Giỏ PO ({poCart.length})
                 </button>
               </div>
             </div>
@@ -1257,13 +1391,17 @@ export default function ProcurementApp({
                 <span>▾ Bấm để lọc nhiều giá trị</span>
               </p>
             </div>
-            {poSelections.length > 0 && (
+            {poCart.length > 0 && (
               <div className="po-selection-bar">
                 <span>
-                  ✓ Đã chọn <b>{poSelections.length}</b> mặt hàng của{" "}
-                  <b>{best(poSelections[0])?.supplier.name}</b>
+                  ✓ Giỏ có <b>{poCart.length}</b> dòng từ{" "}
+                  <b>{new Set(poCart.map((line) => line.allocation.prId)).size} PR</b>
+                  {" · "}<b>{suppliers.find((s) => s.id === poCart[0].supplierId)?.name}</b>
                 </span>
-                <button onClick={() => setPoSelections([])}>Bỏ chọn</button>
+                <div>
+                  <button onClick={() => setPoCartOpen(true)}>Xem giỏ / Tạo PO</button>
+                  <button onClick={() => { setPoCart([]); setPoSelections([]); }}>Làm trống</button>
+                </div>
               </div>
             )}
             <AdvancedItemsTable
@@ -1295,6 +1433,77 @@ export default function ProcurementApp({
           </section>
         )}
       </main>
+      {poCartOpen && (
+        <div className="backdrop" onMouseDown={() => setPoCartOpen(false)}>
+          <div className="po-cart-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <header>
+              <div>
+                <em>GIỎ TẠO PO LIÊN PR</em>
+                <h2>Tạo PO từ nhiều đề nghị mua hàng</h2>
+                <p>
+                  {suppliers.find((s) => s.id === poCart[0]?.supplierId)?.name} ·{" "}
+                  {new Set(poCart.map((line) => line.allocation.prId)).size} PR
+                </p>
+              </div>
+              <button onClick={() => setPoCartOpen(false)}>×</button>
+            </header>
+            <div className="po-cart-table">
+              <table>
+                <thead>
+                  <tr><th>PR nguồn</th><th>Mã hàng</th><th>Tên hàng</th><th>SL yêu cầu</th><th>Đã đặt</th><th>Đặt lần này</th><th>Còn lại</th><th>Đơn giá</th><th></th></tr>
+                </thead>
+                <tbody>
+                  {poCart.map((line) => {
+                    const already = orderedQty(
+                        line.allocation.prId,
+                        line.allocation.prNumber,
+                        line.allocation.prItemId,
+                        line.item.code,
+                      ),
+                      available = Math.max(0, line.item.qty - already),
+                      after = Math.max(0, available - line.allocation.qty);
+                    return (
+                      <tr key={line.id}>
+                        <td><b>{line.allocation.prNumber}</b></td>
+                        <td>{line.item.code}</td>
+                        <td>{line.item.name}</td>
+                        <td className="num">{line.item.qty}</td>
+                        <td className="num">{already}</td>
+                        <td>
+                          <input
+                            type="number"
+                            min={0.0001}
+                            max={available}
+                            step="any"
+                            value={line.allocation.qty}
+                            onChange={(e) => {
+                              const qty = Math.max(0, Math.min(available, Number(e.target.value) || 0));
+                              setPoCart((cart) => cart.map((item) => item.id === line.id ? { ...item, allocation: { ...item.allocation, qty } } : item));
+                            }}
+                          />
+                        </td>
+                        <td className="num">{after}</td>
+                        <td className="money">{fmt(line.price)} ₫</td>
+                        <td><button className="delete-action" onClick={() => { setPoCart((cart) => cart.filter((item) => item.id !== line.id)); if (line.allocation.prId === selectedPR.id) setPoSelections((ids) => ids.filter((id) => id !== line.allocation.prItemId)); }}>Bỏ</button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <footer>
+              <div>
+                <span>Tổng giá trị PO</span>
+                <b>{fmt(poCart.reduce((sum, line) => sum + line.allocation.qty * line.price, 0))} ₫</b>
+              </div>
+              <div>
+                <button className="ghost" onClick={() => setPoCartOpen(false)}>Tiếp tục chọn PR khác</button>
+                <button className="po-create-btn" disabled={!poCart.length || poCart.some((line) => line.allocation.qty <= 0)} onClick={createPO}>Phát hành PO</button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
       {deleteTarget && (
         <div className="backdrop" onMouseDown={() => !deleteBusy && setDeleteTarget(null)}>
           <div className="modal delete-confirm" onMouseDown={(e) => e.stopPropagation()}>
@@ -3694,6 +3903,7 @@ function PODetail({
               <tr>
                 <th>Mã hàng</th>
                 <th>Tên sản phẩm</th>
+                <th>Phân bổ PR nguồn</th>
                 <th>SL đặt</th>
                 <th>Đã giao</th>
                 <th>Trạng thái</th>
@@ -3708,6 +3918,19 @@ function PODetail({
                   <td>
                     <b>{i.name}</b>
                     <small>{i.category}</small>
+                  </td>
+                  <td>
+                    {i.allocations?.length ? (
+                      <div className="allocation-list">
+                        {i.allocations.map((allocation) => (
+                          <span key={`${allocation.prId}:${allocation.prItemId}`}>
+                            {allocation.prNumber}: <b>{allocation.qty} {i.unit}</b>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span>{po.prNumber}</span>
+                    )}
                   </td>
                   <td>
                     {i.qty} {i.unit}
