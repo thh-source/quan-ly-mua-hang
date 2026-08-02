@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS files (
  content_type TEXT NOT NULL,
  size INTEGER NOT NULL,
  uploaded_at TEXT NOT NULL
+ ,owner_user_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS share_links (
@@ -32,6 +33,8 @@ CREATE TABLE IF NOT EXISTS share_links (
  revoked_at TEXT,
  last_viewed_at TEXT,
  view_count INTEGER DEFAULT 0 NOT NULL
+ ,owner_user_id TEXT,
+ scope TEXT NOT NULL DEFAULT 'user'
 );
 
 CREATE TABLE IF NOT EXISTS users (
