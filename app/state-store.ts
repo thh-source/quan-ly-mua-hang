@@ -71,6 +71,9 @@ function remap(data: Record<string, any>, index: number) {
     quoteSupplierIds: (data.quoteSupplierIds || []).map((id: number) =>
       add(id, offset),
     ),
+    hiddenContractIds: (data.hiddenContractIds || []).map((id: number) =>
+      add(id, offset),
+    ),
   };
 }
 
@@ -85,7 +88,7 @@ export async function readAllWorkspaces() {
     remap(JSON.parse(row.payload), index),
   );
   const combined: Record<string, any> = {
-    prs: [], products: [], suppliers: [], quotes: {}, pos: [], items: [], quoteSupplierIds: [],
+    prs: [], products: [], suppliers: [], quotes: {}, pos: [], items: [], quoteSupplierIds: [], hiddenContractIds: [], trash: [],
   };
   for (const part of parts) {
     combined.prs.push(...part.prs);
@@ -95,6 +98,7 @@ export async function readAllWorkspaces() {
     combined.pos.push(...part.pos);
     combined.items.push(...part.items);
     combined.quoteSupplierIds.push(...part.quoteSupplierIds);
+    combined.hiddenContractIds.push(...part.hiddenContractIds);
   }
   return combined;
 }

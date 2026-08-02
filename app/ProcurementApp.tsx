@@ -1,6 +1,7 @@
 "use client";
 import {
   ChangeEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -119,6 +120,14 @@ type PO = {
   payments: Payment[];
   note: string;
 };
+type TrashItem = {
+  id: string;
+  type: "PR" | "PO" | "CONTRACT";
+  label: string;
+  deletedAt: string;
+  expiresAt: string;
+  data: PR | PO | { poId: number };
+};
 type View =
   | "dashboard"
   | "prs"
@@ -129,6 +138,7 @@ type View =
   | "po-detail"
   | "contracts"
   | "products"
+  | "trash"
   | "settings";
 type ColumnKey =
   | "stt"
@@ -150,6 +160,8 @@ type StoredState = {
   pos: PO[];
   items: Item[];
   quoteSupplierIds: number[];
+  trash: TrashItem[];
+  hiddenContractIds: number[];
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -286,6 +298,15 @@ export default function ProcurementApp({
   const [poSelections, setPoSelections] = useState<number[]>([]),
     [pos, setPos] = useState<PO[]>(pos0),
     [currentPO, setCurrentPO] = useState<PO>(emptyPO);
+  const [trash, setTrash] = useState<TrashItem[]>([]),
+    [hiddenContractIds, setHiddenContractIds] = useState<number[]>([]),
+    [deleteTarget, setDeleteTarget] = useState<{
+      type: TrashItem["type"];
+      record: PR | PO;
+    } | null>(null),
+    [deletePassword, setDeletePassword] = useState(""),
+    [deleteError, setDeleteError] = useState(""),
+    [deleteBusy, setDeleteBusy] = useState(false);
   const [storageReady, setStorageReady] = useState(false),
     [storageStatus, setStorageStatus] = useState("Đang kết nối dữ liệu...");
   const [workspaceId, setWorkspaceId] = useState(currentUser?.id || ""),
@@ -309,7 +330,68 @@ export default function ProcurementApp({
     purpose: "",
     items: [emptyItem(0), emptyItem(1)],
   });
-  const fileRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null),
+    saveRunningRef = useRef(false),
+    savePendingRef = useRef(false),
+    latestSaveRef = useRef<{ workspaceId: string; payload: StoredState }>({
+      workspaceId,
+      payload: {
+        prs,
+        products,
+        suppliers,
+        quotes,
+        pos,
+        items,
+        quoteSupplierIds,
+        trash,
+        hiddenContractIds,
+      },
+    });
+  const persistState = useCallback(async (keepalive = false) => {
+    savePendingRef.current = true;
+    if (saveRunningRef.current) return;
+    saveRunningRef.current = true;
+    try {
+      while (savePendingRef.current) {
+        savePendingRef.current = false;
+        const job = latestSaveRef.current;
+        setStorageStatus("Đang tự động lưu...");
+        const response = await fetch(
+          `/api/state?workspace=${encodeURIComponent(job.workspaceId)}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(job.payload),
+            keepalive,
+          },
+        );
+        if (!response.ok) throw new Error("SAVE_FAILED");
+        setStorageStatus(
+          `Đã lưu lúc ${new Date().toLocaleTimeString("vi-VN")}`,
+        );
+      }
+    } catch {
+      setStorageStatus("Tự động lưu thất bại · Hệ thống sẽ thử lại");
+    } finally {
+      saveRunningRef.current = false;
+    }
+  }, []);
+  useEffect(() => {
+    latestSaveRef.current = {
+      workspaceId,
+      payload: {
+        prs,
+        products,
+        suppliers,
+        quotes,
+        pos,
+        items,
+        quoteSupplierIds,
+        trash,
+        hiddenContractIds,
+      },
+    };
+  }, [hiddenContractIds, items, pos, products, prs, quoteSupplierIds, quotes, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -345,6 +427,13 @@ export default function ProcurementApp({
           setQuoteSupplierIds(
             data.quoteSupplierIds || suppliers0.map((s) => s.id),
           );
+          const now = Date.now();
+          setTrash(
+            (data.trash || []).filter(
+              (entry) => new Date(entry.expiresAt).getTime() > now,
+            ),
+          );
+          setHiddenContractIds(data.hiddenContractIds || []);
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
         } else {
@@ -355,6 +444,8 @@ export default function ProcurementApp({
           setPos([]);
           setItems([]);
           setQuoteSupplierIds([]);
+          setTrash([]);
+          setHiddenContractIds([]);
           setSelectedPR(emptyPR);
           setCurrentPO(emptyPO);
         }
@@ -368,27 +459,7 @@ export default function ProcurementApp({
   }, [reportToken, workspaceId]);
   useEffect(() => {
     if (!storageReady || reportMode) return;
-    const timer = setTimeout(() => {
-      setStorageStatus("Đang lưu...");
-      fetch(`/api/state?workspace=${encodeURIComponent(workspaceId)}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prs,
-          products,
-          suppliers,
-          quotes,
-          pos,
-          items,
-          quoteSupplierIds,
-        }),
-      })
-        .then((r) => {
-          if (!r.ok) throw new Error();
-          setStorageStatus("Đã lưu trên Cloudflare");
-        })
-        .catch(() => setStorageStatus("Lưu dữ liệu thất bại"));
-    }, 700);
+    const timer = setTimeout(() => void persistState(), 300);
     return () => clearTimeout(timer);
   }, [
     storageReady,
@@ -400,8 +471,26 @@ export default function ProcurementApp({
     pos,
     items,
     quoteSupplierIds,
+    trash,
+    hiddenContractIds,
     workspaceId,
+    persistState,
   ]);
+  useEffect(() => {
+    if (!storageReady || reportMode) return;
+    const flush = () => void persistState(document.visibilityState === "hidden"),
+      visibility = () => {
+        if (document.visibilityState === "hidden") flush();
+      };
+    document.addEventListener("focusout", flush);
+    document.addEventListener("visibilitychange", visibility);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      document.removeEventListener("focusout", flush);
+      document.removeEventListener("visibilitychange", visibility);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [persistState, reportMode, storageReady]);
   const uploadGeneralFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -452,6 +541,8 @@ export default function ProcurementApp({
           pos,
           items,
           quoteSupplierIds,
+          trash,
+          hiddenContractIds,
         }),
       });
     } catch {}
@@ -460,6 +551,80 @@ export default function ProcurementApp({
     } finally {
       window.location.replace("/");
     }
+  };
+  const requestDelete = (type: TrashItem["type"], record: PR | PO) => {
+    setDeleteTarget({ type, record });
+    setDeletePassword("");
+    setDeleteError("");
+  };
+  const confirmDelete = async () => {
+    if (!deleteTarget || !deletePassword) return;
+    setDeleteBusy(true);
+    setDeleteError("");
+    try {
+      const response = await fetch("/api/auth/verify-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Mật khẩu không đúng");
+      const now = new Date(),
+        expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+        record = deleteTarget.record,
+        entry: TrashItem = {
+          id: crypto.randomUUID(),
+          type: deleteTarget.type,
+          label:
+            deleteTarget.type === "PR"
+              ? (record as PR).number
+              : deleteTarget.type === "CONTRACT"
+                ? `HĐ-${(record as PO).number}`
+                : (record as PO).number,
+          deletedAt: now.toISOString(),
+          expiresAt: expires.toISOString(),
+          data:
+            deleteTarget.type === "CONTRACT"
+              ? { poId: (record as PO).id }
+              : record,
+        };
+      setTrash((list) => [entry, ...list]);
+      if (deleteTarget.type === "PR") {
+        setPrs((list) => list.filter((pr) => pr.id !== record.id));
+        if (selectedPR.id === record.id) setSelectedPR(emptyPR);
+        setView("prs");
+      } else if (deleteTarget.type === "PO") {
+        setPos((list) => list.filter((po) => po.id !== record.id));
+        if (currentPO.id === record.id) setCurrentPO(emptyPO);
+        setView("po-list");
+      } else {
+        setHiddenContractIds((ids) => [...new Set([...ids, record.id])]);
+        setView("contracts");
+      }
+      setDeleteTarget(null);
+      setDeletePassword("");
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Không thể xóa");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+  const restoreTrash = (entry: TrashItem) => {
+    if (entry.type === "PR") {
+      const pr = entry.data as PR;
+      setPrs((list) =>
+        list.some((item) => item.id === pr.id) ? list : [pr, ...list],
+      );
+    } else if (entry.type === "PO") {
+      const po = entry.data as PO;
+      setPos((list) =>
+        list.some((item) => item.id === po.id) ? list : [po, ...list],
+      );
+    } else {
+      const poId = (entry.data as { poId: number }).poId;
+      setHiddenContractIds((ids) => ids.filter((id) => id !== poId));
+    }
+    setTrash((list) => list.filter((item) => item.id !== entry.id));
   };
   const filtered = useMemo(
     () =>
@@ -732,6 +897,7 @@ export default function ProcurementApp({
     setCurrentPO(po);
     setPos((list) => list.map((x) => (x.id === po.id ? po : x)));
   };
+  const activeContracts = pos.filter((po) => !hiddenContractIds.includes(po.id));
   const nav = [
     { icon: "▦", name: "Tổng quan", action: () => setView("dashboard") },
     { icon: "▣", name: "Danh sách PR", action: () => setView("prs") },
@@ -740,6 +906,11 @@ export default function ProcurementApp({
     { icon: "▧", name: "Hợp đồng", action: () => setView("contracts") },
     { icon: "▱", name: "Nhà cung cấp", action: () => setView("suppliers") },
     { icon: "◇", name: "Hàng hóa", action: () => setView("products") },
+    {
+      icon: "♲",
+      name: `Thùng rác${trash.length ? ` (${trash.length})` : ""}`,
+      action: () => setView("trash"),
+    },
     ...(currentUser?.role === "master" || currentUser?.role === "admin"
       ? [
           {
@@ -785,6 +956,7 @@ export default function ProcurementApp({
                 (view === "contracts" && n.name === "Hợp đồng") ||
                 (view === "products" && n.name === "Hàng hóa") ||
                 (view === "suppliers" && n.name === "Nhà cung cấp") ||
+                (view === "trash" && n.name.startsWith("Thùng rác")) ||
                 (view === "settings" && n.name === "Cài đặt")
                   ? "active"
                   : ""
@@ -820,6 +992,8 @@ export default function ProcurementApp({
                         ? "Hợp đồng"
                         : view === "products"
                           ? "Hàng hóa"
+                          : view === "trash"
+                            ? "Thùng rác"
                           : view === "settings"
                             ? "Cài đặt"
                             : view === "suppliers"
@@ -936,12 +1110,13 @@ export default function ProcurementApp({
         )}
         {view === "contracts" && (
           <ContractManagement
-            pos={pos}
+            pos={activeContracts}
             suppliers={suppliers}
             onOpenPO={(po) => {
               setCurrentPO(po);
               setView("po-detail");
             }}
+            onDelete={reportMode ? undefined : (po) => requestDelete("CONTRACT", po)}
           />
         )}
         {view === "products" && (
@@ -963,6 +1138,7 @@ export default function ProcurementApp({
             prs={prs}
             onCreate={() => setView("create")}
             onOpen={openCompare}
+            onDelete={reportMode ? undefined : (pr) => requestDelete("PR", pr)}
           />
         )}
         {view === "create" && (
@@ -993,7 +1169,11 @@ export default function ProcurementApp({
               setCurrentPO(po);
               setView("po-detail");
             }}
+            onDelete={reportMode ? undefined : (po) => requestDelete("PO", po)}
           />
+        )}
+        {view === "trash" && (
+          <TrashPage entries={trash} onRestore={restoreTrash} />
         )}
         {view === "po-detail" && (
           <PODetail
@@ -1115,6 +1295,38 @@ export default function ProcurementApp({
           </section>
         )}
       </main>
+      {deleteTarget && (
+        <div className="backdrop" onMouseDown={() => !deleteBusy && setDeleteTarget(null)}>
+          <div className="modal delete-confirm" onMouseDown={(e) => e.stopPropagation()}>
+            <i>!</i>
+            <h2>Xác nhận chuyển vào thùng rác</h2>
+            <p>
+              Bạn đang xóa <b>{deleteTarget.type === "PR" ? (deleteTarget.record as PR).number : deleteTarget.type === "CONTRACT" ? `HĐ-${(deleteTarget.record as PO).number}` : (deleteTarget.record as PO).number}</b>.
+              Bản ghi có thể phục hồi trong vòng 30 ngày.
+            </p>
+            <label>
+              Nhập mật khẩu tài khoản hiện tại
+              <input
+                autoFocus
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void confirmDelete()}
+                placeholder="Nhập mật khẩu để xác nhận"
+              />
+            </label>
+            {deleteError && <div className="delete-error">⚠ {deleteError}</div>}
+            <div>
+              <button className="ghost" disabled={deleteBusy} onClick={() => setDeleteTarget(null)}>
+                Hủy
+              </button>
+              <button className="danger-confirm" disabled={!deletePassword || deleteBusy} onClick={confirmDelete}>
+                {deleteBusy ? "Đang kiểm tra..." : "Xác nhận xóa"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {supplierModal && (
         <div className="backdrop" onMouseDown={() => setSupplierModal(false)}>
           <div
@@ -2270,10 +2482,12 @@ function ContractManagement({
   pos,
   suppliers,
   onOpenPO,
+  onDelete,
 }: {
   pos: PO[];
   suppliers: Supplier[];
   onOpenPO: (po: PO) => void;
+  onDelete?: (po: PO) => void;
 }) {
   const [selectedId, setSelectedId] = useState(pos[0]?.id || 0),
     [tab, setTab] = useState<"timeline" | "documents" | "invoices">("timeline"),
@@ -2342,7 +2556,14 @@ function ContractManagement({
           <h1>Quản lý hợp đồng</h1>
           <p>Theo dõi nghĩa vụ giao hàng, hóa đơn và hồ sơ theo từng PO.</p>
         </div>
-        <button className="primary">＋ Tạo hợp đồng từ PO</button>
+        <div className="actions">
+          <button className="primary">＋ Tạo hợp đồng từ PO</button>
+          {onDelete && (
+            <button className="danger-action" onClick={() => onDelete(selected)}>
+              🗑 Xóa hợp đồng
+            </button>
+          )}
+        </div>
       </div>
       <div className="contract-kpis">
         <article>
@@ -3165,10 +3386,12 @@ function POList({
   pos,
   suppliers,
   onOpen,
+  onDelete,
 }: {
   pos: PO[];
   suppliers: Supplier[];
   onOpen: (po: PO) => void;
+  onDelete?: (po: PO) => void;
 }) {
   const [q, setQ] = useState("");
   const shown = pos.filter((po) => {
@@ -3297,9 +3520,16 @@ function POList({
                       <b>{total ? Math.round((paid / total) * 100) : 0}%</b>
                     </td>
                     <td>
-                      <button className="row-action" onClick={() => onOpen(po)}>
-                        Quản lý →
-                      </button>
+                      <div className="row-actions">
+                        <button className="row-action" onClick={() => onOpen(po)}>
+                          Quản lý →
+                        </button>
+                        {onDelete && (
+                          <button className="delete-action" onClick={() => onDelete(po)}>
+                            Xóa
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -3731,14 +3961,60 @@ function PODetail({
   );
 }
 
+function TrashPage({
+  entries,
+  onRestore,
+}: {
+  entries: TrashItem[];
+  onRestore: (entry: TrashItem) => void;
+}) {
+  const [openedAt] = useState(() => Date.now());
+  const daysLeft = (expiresAt: string) =>
+    Math.max(0, Math.ceil((new Date(expiresAt).getTime() - openedAt) / 86400000));
+  return (
+    <section className="content trash-page">
+      <div className="heading">
+        <div>
+          <em>LƯU TRỮ TẠM THỜI 30 NGÀY</em>
+          <h1>Thùng rác</h1>
+          <p>PR, PO và hợp đồng đã xóa có thể được phục hồi trước ngày hết hạn.</p>
+        </div>
+      </div>
+      <div className="trash-notice">
+        <i>♲</i>
+        <div><b>{entries.length} bản ghi đang lưu tạm</b><span>Hệ thống tự loại khỏi thùng rác sau 30 ngày.</span></div>
+      </div>
+      <div className="trash-table">
+        <table>
+          <thead><tr><th>Loại dữ liệu</th><th>Số chứng từ</th><th>Ngày xóa</th><th>Hết hạn sau</th><th></th></tr></thead>
+          <tbody>
+            {!entries.length && <tr><td colSpan={5} className="trash-empty">Thùng rác đang trống.</td></tr>}
+            {entries.map((entry) => (
+              <tr key={entry.id}>
+                <td><span className={`trash-type ${entry.type.toLowerCase()}`}>{entry.type === "CONTRACT" ? "Hợp đồng" : entry.type}</span></td>
+                <td><b>{entry.label}</b></td>
+                <td>{dateVN(entry.deletedAt)}</td>
+                <td><span className="expiry-badge">{daysLeft(entry.expiresAt)} ngày</span></td>
+                <td><button className="restore-action" onClick={() => onRestore(entry)}>↶ Phục hồi</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function PRList({
   prs,
   onCreate,
   onOpen,
+  onDelete,
 }: {
   prs: PR[];
   onCreate: () => void;
   onOpen: (pr: PR) => void;
+  onDelete?: (pr: PR) => void;
 }) {
   const [q, setQ] = useState("");
   const shown = prs.filter((p) =>
@@ -3827,9 +4103,16 @@ function PRList({
                     </span>
                   </td>
                   <td>
-                    <button className="row-action" onClick={() => onOpen(pr)}>
-                      Mở PR →
-                    </button>
+                    <div className="row-actions">
+                      <button className="row-action" onClick={() => onOpen(pr)}>
+                        Mở PR →
+                      </button>
+                      {onDelete && (
+                        <button className="delete-action" onClick={() => onDelete(pr)}>
+                          Xóa
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
