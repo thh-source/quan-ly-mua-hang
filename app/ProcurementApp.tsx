@@ -1,6 +1,37 @@
 "use client";
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
+import SmartTableTools from "./SmartTableTools";
+
+function AutoGrowTextarea({
+  value,
+  onChange,
+  className = "",
+  placeholder = "",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    element.style.height = "0px";
+    element.style.height = `${Math.max(32, element.scrollHeight)}px`;
+  }, [value]);
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      className={`smart-cell-textarea ${className}`}
+      value={value}
+      placeholder={placeholder}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  );
+}
 
 type Item = {
   id: number;
@@ -664,6 +695,7 @@ export default function ProcurementApp({
     <div
       className={`app ${collapsed ? "collapsed" : ""} ${reportMode ? "report-mode" : ""}`}
     >
+      <SmartTableTools scopeKey={view} />
       <aside>
         <div className="brand">
           <span>◆</span>
@@ -1197,15 +1229,25 @@ function AdvancedItemsTable({
       );
     const inputKey = key as keyof Item;
     const numeric = key === "qty" || key === "estimate";
+    const multiline =
+      key === "category" || key === "name" || key === "desc" || key === "spec";
     return (
       <td key={key}>
-        <input
-          className={`${key === "name" || key === "desc" ? "wide" : ""} ${key === "unit" || key === "qty" ? "short" : ""} ${numeric ? "num" : ""} ${key === "category" ? "category-input" : ""}`}
-          type={numeric ? "number" : "text"}
-          value={String(item[inputKey])}
-          onChange={(e) => itemChange(item.id, inputKey, e.target.value)}
-          placeholder={key === "category" ? "Chọn nhóm..." : ""}
-        />
+        {multiline ? (
+          <AutoGrowTextarea
+            className={key === "category" ? "category-input" : ""}
+            value={String(item[inputKey])}
+            onChange={(value) => itemChange(item.id, inputKey, value)}
+            placeholder={key === "category" ? "Chọn nhóm..." : ""}
+          />
+        ) : (
+          <input
+            className={`${key === "unit" || key === "qty" ? "short" : ""} ${numeric ? "num" : ""}`}
+            type={numeric ? "number" : "text"}
+            value={String(item[inputKey])}
+            onChange={(e) => itemChange(item.id, inputKey, e.target.value)}
+          />
+        )}
       </td>
     );
   };
@@ -1355,11 +1397,11 @@ function AdvancedItemsTable({
                       </div>
                     </td>,
                     <td key={s.id + "n"}>
-                      <input
+                      <AutoGrowTextarea
                         placeholder="Ghi chú"
                         value={q.note}
-                        onChange={(e) =>
-                          quoteChange(i.id, s.id, "note", e.target.value)
+                        onChange={(value) =>
+                          quoteChange(i.id, s.id, "note", value)
                         }
                       />
                     </td>,
@@ -1474,16 +1516,31 @@ function DraftItemsTable({
         </td>
       );
     const inputKey = key as keyof Item,
-      numeric = key === "qty" || key === "estimate";
+      numeric = key === "qty" || key === "estimate",
+      multiline =
+        key === "category" ||
+        key === "name" ||
+        key === "desc" ||
+        key === "spec";
     return (
       <td key={key}>
-        <input
-          className={`${key === "name" || key === "desc" ? "wide" : ""} ${key === "unit" || key === "qty" ? "short" : ""} ${numeric ? "num" : ""} ${key === "category" ? "category-input" : ""}`}
-          type={numeric ? "number" : "text"}
-          value={String(item[inputKey])}
-          onChange={(e) => itemChange(item.id, inputKey, e.target.value, true)}
-          placeholder={key === "category" ? "Ví dụ: Cơ khí" : ""}
-        />
+        {multiline ? (
+          <AutoGrowTextarea
+            className={key === "category" ? "category-input" : ""}
+            value={String(item[inputKey])}
+            onChange={(value) => itemChange(item.id, inputKey, value, true)}
+            placeholder={key === "category" ? "Ví dụ: Cơ khí" : ""}
+          />
+        ) : (
+          <input
+            className={`${key === "unit" || key === "qty" ? "short" : ""} ${numeric ? "num" : ""}`}
+            type={numeric ? "number" : "text"}
+            value={String(item[inputKey])}
+            onChange={(e) =>
+              itemChange(item.id, inputKey, e.target.value, true)
+            }
+          />
+        )}
       </td>
     );
   };
@@ -1737,11 +1794,13 @@ function ProductCatalog({
               const h = history(p),
                 latest = h[0],
                 previous = h[1],
-                change = latest && previous
-                  ? Math.round(
-                      ((latest.price - previous.price) / previous.price) * 100,
-                    )
-                  : 0;
+                change =
+                  latest && previous
+                    ? Math.round(
+                        ((latest.price - previous.price) / previous.price) *
+                          100,
+                      )
+                    : 0;
               return (
                 <tbody key={p.id} className="product-group">
                   <tr>
@@ -2274,20 +2333,22 @@ function ContractManagement({
               </small>
             </div>
           </div>
-          {selected.expectedDate && <div className="deadline-alert">
-            <i>!</i>
-            <div>
-              <b>Sắp đến hạn giao hàng</b>
-              <p>
-                Hạn giao dự kiến {dateVN(selected.expectedDate)} · Còn{" "}
-                {Math.max(0, ordered - delivered)} đơn vị chưa giao. Cần xác
-                nhận tiến độ với nhà cung cấp.
-              </p>
+          {selected.expectedDate && (
+            <div className="deadline-alert">
+              <i>!</i>
+              <div>
+                <b>Sắp đến hạn giao hàng</b>
+                <p>
+                  Hạn giao dự kiến {dateVN(selected.expectedDate)} · Còn{" "}
+                  {Math.max(0, ordered - delivered)} đơn vị chưa giao. Cần xác
+                  nhận tiến độ với nhà cung cấp.
+                </p>
+              </div>
+              <button onClick={() => onOpenPO(selected)}>
+                Cập nhật giao hàng
+              </button>
             </div>
-            <button onClick={() => onOpenPO(selected)}>
-              Cập nhật giao hàng
-            </button>
-          </div>}
+          )}
           <div className="contract-progress">
             <article>
               <span>Giao hàng</span>
@@ -2390,8 +2451,8 @@ function ContractManagement({
           )}
           {tab === "invoices" && (
             <div className="invoice-table empty-state">
-              Chưa có dữ liệu hóa đơn. Hóa đơn sẽ hiển thị sau khi được cập
-              nhật vào PO.
+              Chưa có dữ liệu hóa đơn. Hóa đơn sẽ hiển thị sau khi được cập nhật
+              vào PO.
             </div>
           )}
         </div>
@@ -2546,7 +2607,11 @@ function Dashboard({
             </div>
           </div>
           <div className="donut">
-            <div style={{background:`conic-gradient(#168446 0 ${progressPercent}%,#f0b54a ${progressPercent}% ${Math.min(100,progressPercent+(doing/progressTotal||0)*100)}%,#e8edf3 0)`}}>
+            <div
+              style={{
+                background: `conic-gradient(#168446 0 ${progressPercent}%,#f0b54a ${progressPercent}% ${Math.min(100, progressPercent + (doing / progressTotal || 0) * 100)}%,#e8edf3 0)`,
+              }}
+            >
               <strong>{progressPercent}%</strong>
               <span>Đúng tiến độ</span>
             </div>

@@ -1,0 +1,201 @@
+.smart-table-enabled {
+  table-layout: fixed !important;
+}
+.smart-table-enabled th,
+.smart-table-enabled td {
+  height: auto !important;
+  min-height: 43px;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: middle;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.smart-table-enabled th {
+  position: relative;
+}
+.smart-table-enabled th:after {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: 0;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 15;
+}
+.smart-table-enabled td input:not([type="checkbox"]):not([type="radio"]),
+.smart-table-enabled td select {
+  max-width: 100%;
+  width: 100%;
+}
+.smart-cell-textarea {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 5px;
+  resize: none;
+  overflow: hidden;
+  line-height: 1.35;
+  font: inherit;
+  color: inherit;
+}
+.smart-cell-textarea:focus {
+  outline: 0;
+  border-color: var(--blue);
+  background: white;
+  box-shadow: 0 0 0 2px #1672f322;
+}
+.smart-table-tools {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 90;
+}
+.smart-table-launch {
+  height: 42px;
+  border: 1px solid #0c61d8;
+  border-radius: 22px;
+  background: #1672f3;
+  color: white;
+  padding: 0 17px;
+  font-weight: 750;
+  box-shadow: 0 8px 25px #0a3d8050;
+}
+.smart-table-panel {
+  position: absolute;
+  right: 0;
+  bottom: 50px;
+  width: min(390px, calc(100vw - 28px));
+  max-height: min(610px, 75vh);
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 1px solid #cbd8e5;
+  border-radius: 11px;
+  box-shadow: 0 20px 55px #082a4d40;
+  overflow: hidden;
+}
+.smart-table-panel header {
+  position: static;
+  height: auto;
+  min-height: 60px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.smart-table-panel header div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.smart-table-panel header small {
+  color: var(--muted);
+  max-width: 290px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.smart-table-panel header button {
+  border: 0;
+  background: none;
+  font-size: 20px;
+  color: var(--muted);
+}
+.smart-table-panel > p {
+  margin: 0;
+  padding: 10px 14px;
+  background: #f5f8fc;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.5;
+}
+.smart-column-list {
+  overflow: auto;
+  padding: 7px 12px;
+}
+.smart-column-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 43px;
+  border-bottom: 1px solid #edf1f5;
+}
+.smart-column-list label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.smart-column-list label input {
+  accent-color: var(--blue);
+}
+.smart-column-list label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 650;
+}
+.smart-column-list .hidden-column {
+  opacity: 0.55;
+}
+.smart-column-list > div > div {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.smart-column-list button {
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  color: var(--blue);
+}
+.smart-column-list output {
+  width: 35px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--muted);
+}
+.smart-table-panel footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 13px;
+  border-top: 1px solid var(--line);
+  background: #fbfcfe;
+}
+.smart-table-panel footer button {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  color: #38516d;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 650;
+}
+.smart-table-panel footer button:last-child {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: white;
+}
+@media (max-width: 720px) {
+  .smart-table-tools {
+    right: 12px;
+    bottom: 12px;
+  }
+  .smart-table-panel {
+    max-height: 70vh;
+  }
+}
