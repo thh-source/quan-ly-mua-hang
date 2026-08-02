@@ -38,14 +38,31 @@ function remap(data: Record<string, any>, index: number) {
   }));
   const mapItem = (item: any) => ({ ...item, id: add(item.id, offset) });
   const quotes: Record<string, unknown> = {};
-  Object.entries(data.quotes || {}).forEach(([itemId, supplierQuotes]) => {
+  const remapQuotes = (source: Record<string, unknown>) => {
+    const target: Record<string, unknown> = {};
+    Object.entries(source || {}).forEach(([itemId, supplierQuotes]) => {
     const next: Record<string, unknown> = {};
     Object.entries((supplierQuotes || {}) as Record<string, unknown>).forEach(
       ([supplierId, quote]) => {
         next[String(Number(supplierId) + offset)] = quote;
       },
     );
-    quotes[String(Number(itemId) + offset)] = next;
+      target[String(Number(itemId) + offset)] = next;
+    });
+    return target;
+  };
+  Object.assign(quotes, remapQuotes(data.quotes || {}));
+  const quotesByPr: Record<string, unknown> = {};
+  Object.entries(data.quotesByPr || {}).forEach(([prId, prQuotes]) => {
+    quotesByPr[String(Number(prId) + offset)] = remapQuotes(
+      prQuotes as Record<string, unknown>,
+    );
+  });
+  const quoteSupplierIdsByPr: Record<string, number[]> = {};
+  Object.entries(data.quoteSupplierIdsByPr || {}).forEach(([prId, ids]) => {
+    quoteSupplierIdsByPr[String(Number(prId) + offset)] = (
+      ids as number[]
+    ).map((id) => Number(add(id, offset)));
   });
   return {
     prs: (data.prs || []).map((pr: any) => ({
@@ -56,6 +73,8 @@ function remap(data: Record<string, any>, index: number) {
     products: (data.products || []).map(mapItem),
     suppliers,
     quotes,
+    quotesByPr,
+    quoteSupplierIdsByPr,
     pos: (data.pos || []).map((po: any) => ({
       ...po,
       id: add(po.id, offset),
@@ -95,13 +114,15 @@ export async function readAllWorkspaces() {
     remap(JSON.parse(row.payload), index),
   );
   const combined: Record<string, any> = {
-    prs: [], products: [], suppliers: [], quotes: {}, pos: [], items: [], quoteSupplierIds: [], hiddenContractIds: [], trash: [], poCart: [],
+    prs: [], products: [], suppliers: [], quotes: {}, quotesByPr: {}, quoteSupplierIdsByPr: {}, pos: [], items: [], quoteSupplierIds: [], hiddenContractIds: [], trash: [], poCart: [],
   };
   for (const part of parts) {
     combined.prs.push(...part.prs);
     combined.products.push(...part.products);
     combined.suppliers.push(...part.suppliers);
     Object.assign(combined.quotes, part.quotes);
+    Object.assign(combined.quotesByPr, part.quotesByPr);
+    Object.assign(combined.quoteSupplierIdsByPr, part.quoteSupplierIdsByPr);
     combined.pos.push(...part.pos);
     combined.items.push(...part.items);
     combined.quoteSupplierIds.push(...part.quoteSupplierIds);

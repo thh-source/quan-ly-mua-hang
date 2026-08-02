@@ -177,6 +177,8 @@ type StoredState = {
   trash: TrashItem[];
   hiddenContractIds: number[];
   poCart: POCartLine[];
+  quotesByPr: Record<number, Quote>;
+  quoteSupplierIdsByPr: Record<number, number[]>;
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -292,11 +294,15 @@ export default function ProcurementApp({
   const [items, setItems] = useState(items0),
     [suppliers, setSuppliers] = useState(suppliers0),
     [quotes, setQuotes] = useState(quotes0),
+    [quotesByPr, setQuotesByPr] = useState<Record<number, Quote>>({}),
     [search, setSearch] = useState("");
   const [products, setProducts] = useState<Item[]>(items0);
   const [quoteSupplierIds, setQuoteSupplierIds] = useState<number[]>(
       suppliers0.map((s) => s.id),
     ),
+    [quoteSupplierIdsByPr, setQuoteSupplierIdsByPr] = useState<
+      Record<number, number[]>
+    >({}),
     [supplierPicker, setSupplierPicker] = useState(false),
     [selectedSupplierId, setSelectedSupplierId] = useState("");
   const [supplierModal, setSupplierModal] = useState(false),
@@ -369,6 +375,8 @@ export default function ProcurementApp({
         trash,
         hiddenContractIds,
         poCart,
+        quotesByPr,
+        quoteSupplierIdsByPr,
       },
     });
   const persistState = useCallback(async (keepalive = false) => {
@@ -414,9 +422,11 @@ export default function ProcurementApp({
         trash,
         hiddenContractIds,
         poCart,
+        quotesByPr,
+        quoteSupplierIdsByPr,
       },
     };
-  }, [hiddenContractIds, items, poCart, pos, products, prs, quoteSupplierIds, quotes, suppliers, trash, workspaceId]);
+  }, [hiddenContractIds, items, poCart, pos, products, prs, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -443,14 +453,34 @@ export default function ProcurementApp({
         if (!active) return;
         const data = body.data as StoredState | null;
         if (data) {
+          const firstPR = data.prs?.[0],
+            legacyQuoteItemIds = new Set(
+              Object.keys(data.quotes || {}).map(Number),
+            ),
+            legacyQuotePR =
+              data.prs?.find((pr) =>
+                pr.items.some((item) => legacyQuoteItemIds.has(item.id)),
+              ) || firstPR,
+            migratedQuotes =
+              data.quotesByPr ||
+              (legacyQuotePR && Object.keys(data.quotes || {}).length
+                ? { [legacyQuotePR.id]: data.quotes }
+                : {}),
+            migratedSupplierIds =
+              data.quoteSupplierIdsByPr ||
+              (legacyQuotePR && data.quoteSupplierIds?.length
+                ? { [legacyQuotePR.id]: data.quoteSupplierIds }
+                : {});
           setPrs(data.prs || prs0);
           setProducts(data.products || items0);
           setSuppliers(data.suppliers || suppliers0);
-          setQuotes(data.quotes || quotes0);
+          setQuotesByPr(migratedQuotes);
+          setQuoteSupplierIdsByPr(migratedSupplierIds);
+          setQuotes(firstPR ? migratedQuotes[firstPR.id] || {} : {});
           setPos(data.pos || pos0);
-          setItems(data.items || items0);
+          setItems(firstPR?.items || data.items || items0);
           setQuoteSupplierIds(
-            data.quoteSupplierIds || suppliers0.map((s) => s.id),
+            firstPR ? migratedSupplierIds[firstPR.id] || [] : [],
           );
           const now = Date.now();
           setTrash(
@@ -467,6 +497,8 @@ export default function ProcurementApp({
           setProducts([]);
           setSuppliers([]);
           setQuotes({});
+          setQuotesByPr({});
+          setQuoteSupplierIdsByPr({});
           setPos([]);
           setItems([]);
           setQuoteSupplierIds([]);
@@ -498,6 +530,8 @@ export default function ProcurementApp({
     pos,
     items,
     quoteSupplierIds,
+    quotesByPr,
+    quoteSupplierIdsByPr,
     trash,
     hiddenContractIds,
     poCart,
@@ -572,6 +606,8 @@ export default function ProcurementApp({
           trash,
           hiddenContractIds,
           poCart,
+          quotesByPr,
+          quoteSupplierIdsByPr,
         }),
       });
     } catch {}
@@ -710,22 +746,27 @@ export default function ProcurementApp({
     sid: number,
     k: "price" | "note",
     v: string,
-  ) =>
-    setQuotes((q) => ({
-      ...q,
-      [iid]: {
-        ...q[iid],
-        [sid]: {
-          price: q[iid]?.[sid]?.price || "",
-          note: q[iid]?.[sid]?.note || "",
-          [k]: v,
+  ) => {
+    const next = {
+        ...quotes,
+        [iid]: {
+          ...quotes[iid],
+          [sid]: {
+            price: quotes[iid]?.[sid]?.price || "",
+            note: quotes[iid]?.[sid]?.note || "",
+            [k]: v,
+          },
         },
-      },
-    }));
+      };
+    setQuotes(next);
+    if (selectedPR.id)
+      setQuotesByPr((all) => ({ ...all, [selectedPR.id]: next }));
+  };
   const openCompare = (pr: PR) => {
     setSelectedPR(pr);
     setItems(pr.items);
-    setQuotes(pr.id === 1 ? quotes0 : {});
+    setQuotes(quotesByPr[pr.id] || {});
+    setQuoteSupplierIds(quoteSupplierIdsByPr[pr.id] || []);
     setPoSelections(
       poCart
         .filter((line) => line.allocation.prId === pr.id)
@@ -840,7 +881,13 @@ export default function ProcurementApp({
   const addQuoteSupplier = () => {
     const id = Number(selectedSupplierId);
     if (!id || quoteSupplierIds.includes(id)) return;
-    setQuoteSupplierIds((ids) => [...ids, id]);
+    const next = [...quoteSupplierIds, id];
+    setQuoteSupplierIds(next);
+    if (selectedPR.id)
+      setQuoteSupplierIdsByPr((all) => ({
+        ...all,
+        [selectedPR.id]: next,
+      }));
     setSelectedSupplierId("");
     setSupplierPicker(false);
   };
@@ -1429,9 +1476,15 @@ export default function ProcurementApp({
               filterOpen={compareFilterOpen}
               setFilterOpen={setCompareFilterOpen}
               suppliers={comparisonSuppliers}
-              onRemoveSupplier={(id) =>
-                setQuoteSupplierIds((ids) => ids.filter((x) => x !== id))
-              }
+              onRemoveSupplier={(id) => {
+                const next = quoteSupplierIds.filter((x) => x !== id);
+                setQuoteSupplierIds(next);
+                if (selectedPR.id)
+                  setQuoteSupplierIdsByPr((all) => ({
+                    ...all,
+                    [selectedPR.id]: next,
+                  }));
+              }}
               quotes={quotes}
               itemChange={itemChange}
               quoteChange={quoteChange}
