@@ -438,6 +438,29 @@ export default function ProcurementApp({
       setStorageStatus("Không thể tạo link báo cáo");
     }
   };
+  const logout = async () => {
+    setStorageStatus("Đang lưu và đăng xuất...");
+    try {
+      await fetch(`/api/state?workspace=${encodeURIComponent(workspaceId)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prs,
+          products,
+          suppliers,
+          quotes,
+          pos,
+          items,
+          quoteSupplierIds,
+        }),
+      });
+    } catch {}
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } finally {
+      window.location.replace("/");
+    }
+  };
   const filtered = useMemo(
     () =>
       applyTools(
@@ -861,6 +884,15 @@ export default function ProcurementApp({
                 </small>
               </div>
             </div>
+            {!reportMode && currentUser && (
+              <button
+                className="header-logout"
+                onClick={logout}
+                title="Đăng xuất tài khoản"
+              >
+                <span>↪</span> Đăng xuất
+              </button>
+            )}
           </div>
         </header>
         {reportMode ? (
