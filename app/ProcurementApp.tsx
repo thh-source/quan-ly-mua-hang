@@ -86,6 +86,7 @@ type PR = {
   purpose: string;
   items: Item[];
   status: string;
+  note?: string;
 };
 type POAllocation = {
   prId: number;
@@ -133,6 +134,7 @@ type PO = {
   docs: PODoc[];
   payments: Payment[];
   note: string;
+  contractNote?: string;
 };
 type TrashItem = {
   id: string;
@@ -351,6 +353,7 @@ export default function ProcurementApp({
     date: new Date().toISOString().slice(0, 10),
     department: "",
     purpose: "",
+    note: "",
     items: [emptyItem(0), emptyItem(1)],
   });
   useEffect(() => {
@@ -774,6 +777,13 @@ export default function ProcurementApp({
     );
     setView("compare");
   };
+  const updatePRNote = (value: string) => {
+    const updated = { ...selectedPR, note: value };
+    setSelectedPR(updated);
+    setPrs((list) =>
+      list.map((pr) => (pr.id === selectedPR.id ? updated : pr)),
+    );
+  };
   const savePR = () => {
     if (
       !draft.number.trim() ||
@@ -789,6 +799,7 @@ export default function ProcurementApp({
       date: draft.date,
       department: draft.department.trim(),
       purpose: draft.purpose.trim(),
+      note: draft.note.trim(),
       items: valid,
       status: "Chờ xử lý",
     };
@@ -804,6 +815,7 @@ export default function ProcurementApp({
       date: new Date().toISOString().slice(0, 10),
       department: "",
       purpose: "",
+      note: "",
       items: [emptyItem(0)],
     });
     setImportMessage("");
@@ -1310,6 +1322,7 @@ export default function ProcurementApp({
               setCurrentPO(po);
               setView("po-detail");
             }}
+            onUpdate={updatePO}
             onDelete={reportMode ? undefined : (po) => requestDelete("CONTRACT", po)}
           />
         )}
@@ -1437,6 +1450,17 @@ export default function ProcurementApp({
                 <strong>{fmt(estimated)} ₫</strong>
               </article>
             </div>
+            <section className="common-note-card">
+              <label>
+                <span>✎ Ghi chú chung PR</span>
+                <textarea
+                  rows={3}
+                  value={selectedPR.note || ""}
+                  placeholder="Diễn giải tự do cho toàn bộ PR..."
+                  onChange={(e) => updatePRNote(e.target.value)}
+                />
+              </label>
+            </section>
             <div className="toolbar">
               <label>
                 ⌕
@@ -2516,6 +2540,7 @@ function CreatePRCatalog({
     date: string;
     department: string;
     purpose: string;
+    note: string;
     items: Item[];
   };
   setDraft: React.Dispatch<
@@ -2524,6 +2549,7 @@ function CreatePRCatalog({
       date: string;
       department: string;
       purpose: string;
+      note: string;
       items: Item[];
     }>
   >;
@@ -2630,6 +2656,17 @@ function CreatePRCatalog({
               value={draft.purpose}
               onChange={(e) =>
                 setDraft((d) => ({ ...d, purpose: e.target.value }))
+              }
+            />
+          </label>
+          <label className="common-note-input">
+            Ghi chú chung PR
+            <textarea
+              rows={4}
+              value={draft.note}
+              placeholder="Nhập diễn giải tự do, lưu ý xử lý hoặc thông tin liên quan..."
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, note: e.target.value }))
               }
             />
           </label>
@@ -2766,11 +2803,13 @@ function ContractManagement({
   pos,
   suppliers,
   onOpenPO,
+  onUpdate,
   onDelete,
 }: {
   pos: PO[];
   suppliers: Supplier[];
   onOpenPO: (po: PO) => void;
+  onUpdate: (po: PO) => void;
   onDelete?: (po: PO) => void;
 }) {
   const [selectedId, setSelectedId] = useState(pos[0]?.id || 0),
@@ -2940,6 +2979,19 @@ function ContractManagement({
               </small>
             </div>
           </div>
+          <section className="common-note-card contract-common-note">
+            <label>
+              <span>✎ Ghi chú chung hợp đồng</span>
+              <textarea
+                rows={3}
+                value={selected.contractNote || ""}
+                placeholder="Diễn giải tự do về điều khoản, phụ lục hoặc lưu ý của hợp đồng..."
+                onChange={(e) =>
+                  onUpdate({ ...selected, contractNote: e.target.value })
+                }
+              />
+            </label>
+          </section>
           {selected.expectedDate && (
             <div className="deadline-alert">
               <i>!</i>
@@ -3903,6 +3955,17 @@ function PODetail({
           <i>{po.status}</i>
         </div>
       </div>
+      <section className="common-note-card po-common-note">
+        <label>
+          <span>✎ Ghi chú chung PO</span>
+          <textarea
+            rows={3}
+            value={po.note || ""}
+            placeholder="Diễn giải tự do, điều kiện đặc biệt hoặc lưu ý thực hiện PO..."
+            onChange={(e) => onUpdate({ ...po, note: e.target.value })}
+          />
+        </label>
+      </section>
       <div className="po-tabs">
         <a href="#supplier">Thông tin NCC</a>
         <a href="#delivery">Giao hàng</a>
