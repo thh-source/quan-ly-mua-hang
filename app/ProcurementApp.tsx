@@ -662,14 +662,11 @@ export default function ProcurementApp({
   const nav = [
     { icon: "▦", name: "Tổng quan", action: () => setView("dashboard") },
     { icon: "▣", name: "Danh sách PR", action: () => setView("prs") },
-    { icon: "▤", name: "Yêu cầu báo giá" },
     { icon: "⚖", name: "So sánh báo giá", action: () => setView("compare") },
     { icon: "▰", name: "Quản lý PO", action: () => setView("po-list") },
     { icon: "▧", name: "Hợp đồng", action: () => setView("contracts") },
     { icon: "▱", name: "Nhà cung cấp", action: () => setView("suppliers") },
     { icon: "◇", name: "Hàng hóa", action: () => setView("products") },
-    { icon: "▥", name: "Báo cáo" },
-    { icon: "≋", name: "Danh mục" },
     ...(currentUser?.role === "master" || currentUser?.role === "admin"
       ? [
           {
