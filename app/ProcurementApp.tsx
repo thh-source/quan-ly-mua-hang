@@ -347,6 +347,12 @@ export default function ProcurementApp({
     purpose: "",
     items: [emptyItem(0), emptyItem(1)],
   });
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (window.matchMedia("(max-width: 720px)").matches) setCollapsed(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null),
     saveRunningRef = useRef(false),
     savePendingRef = useRef(false),
@@ -1106,6 +1112,13 @@ export default function ProcurementApp({
           « <b>Thu gọn</b>
         </button>
       </aside>
+      {!collapsed && (
+        <button
+          className="mobile-sidebar-backdrop"
+          aria-label="Đóng menu"
+          onClick={() => setCollapsed(true)}
+        />
+      )}
       <main>
         <header>
           <button className="hamb" onClick={() => setCollapsed(!collapsed)}>
@@ -1666,6 +1679,15 @@ export default function ProcurementApp({
             </div>
           </div>
         </div>
+      )}
+      {!reportMode && (
+        <nav className="mobile-bottom-nav" aria-label="Điều hướng điện thoại">
+          <button className={view === "dashboard" ? "active" : ""} onClick={() => setView("dashboard")}><span>▦</span><b>Tổng quan</b></button>
+          <button className={view === "prs" || view === "create" ? "active" : ""} onClick={() => setView("prs")}><span>▣</span><b>PR</b></button>
+          <button className={view === "compare" ? "active" : ""} onClick={() => selectedPR.id ? setView("compare") : setView("prs")}><span>⚖</span><b>So sánh</b></button>
+          <button className={view === "po-list" || view === "po-detail" ? "active" : ""} onClick={() => setView("po-list")}><span>▰</span><b>PO</b></button>
+          <button onClick={() => setCollapsed(false)}><span>☰</span><b>Thêm</b></button>
+        </nav>
       )}
     </div>
   );
@@ -3660,6 +3682,22 @@ function POList({
           </label>
           <span>{shown.length} đơn mua hàng</span>
         </div>
+        <div className="mobile-record-list">
+          {shown.map((po) => {
+            const supplier = suppliers.find((s) => s.id === po.supplierId),
+              total = po.items.reduce((sum, item) => sum + item.qty * item.price, 0),
+              delivered = po.items.filter((item) => item.deliveryStatus === "Đã giao").length;
+            return (
+              <article key={po.id}>
+                <header><button onClick={() => onOpen(po)}>{po.number}</button><span className="status progress">{po.status}</span></header>
+                <h3>{supplier?.name || "Chưa có nhà cung cấp"}</h3>
+                <p>{po.prNumber} · {dateVN(po.createdDate)}</p>
+                <dl><div><dt>Giá trị</dt><dd>{fmt(total)} ₫</dd></div><div><dt>Giao hàng</dt><dd>{delivered}/{po.items.length}</dd></div></dl>
+                <footer><button className="row-action" onClick={() => onOpen(po)}>Quản lý PO</button>{onDelete && <button className="delete-action" onClick={() => onDelete(po)}>Xóa</button>}</footer>
+              </article>
+            );
+          })}
+        </div>
         <div className="pr-table">
           <table>
             <thead>
@@ -4287,6 +4325,17 @@ function PRList({
             />
           </label>
           <span>{shown.length} yêu cầu mua hàng</span>
+        </div>
+        <div className="mobile-record-list">
+          {shown.map((pr) => (
+            <article key={pr.id}>
+              <header><button onClick={() => onOpen(pr)}>{pr.number}</button><span className={`status ${pr.status === "Đã hoàn thành" ? "done" : pr.status.includes("PO") || pr.status === "Đang lấy báo giá" ? "progress" : "waiting"}`}>{pr.status}</span></header>
+              <h3>{pr.department}</h3>
+              <p>{pr.purpose}</p>
+              <dl><div><dt>Ngày PR</dt><dd>{dateVN(pr.date)}</dd></div><div><dt>Mặt hàng</dt><dd>{pr.items.length}</dd></div><div><dt>Dự kiến</dt><dd>{fmt(pr.items.reduce((sum, item) => sum + item.qty * item.estimate, 0))} ₫</dd></div></dl>
+              <footer><button className="row-action" onClick={() => onOpen(pr)}>Mở PR</button>{onDelete && <button className="delete-action" onClick={() => onDelete(pr)}>Xóa</button>}</footer>
+            </article>
+          ))}
         </div>
         <div className="pr-table">
           <table>
