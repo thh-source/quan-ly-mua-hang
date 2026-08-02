@@ -71,13 +71,13 @@ export async function hashToken(token: string) {
 
 export async function bootstrapMaster(username: string, password: string) {
   const env = await runtime(),
-    masterId = env.MASTER_ADMIN_ID || "bosmile";
-  if (
-    username !== masterId ||
-    !env.MASTER_ADMIN_PASSWORD ||
-    password !== env.MASTER_ADMIN_PASSWORD
-  )
-    return null;
+    masterId = String(env.MASTER_ADMIN_ID || "bosmile").trim(),
+    configuredPassword = String(env.MASTER_ADMIN_PASSWORD || "")
+      .trim()
+      .replace(/^(['"])(.*)\1$/, "$2");
+  if (username.trim() !== masterId) return null;
+  if (!configuredPassword) throw new Error("MASTER_SECRET_MISSING");
+  if (password.trim() !== configuredPassword) return null;
   await ensureAuthSchema();
   const existing = await env.DB.prepare(
     "SELECT id,username,display_name AS displayName,role FROM users WHERE username=?",
