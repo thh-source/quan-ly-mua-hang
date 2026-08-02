@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     await setSessionCookie(session.token, session.expires);
     return Response.json({ user });
   } catch (error) {
+    console.error("LOGIN_ERROR", error);
     const message = error instanceof Error ? error.message : "";
     if (message === "MASTER_SECRET_MISSING")
       return Response.json(
