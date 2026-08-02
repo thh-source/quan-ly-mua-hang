@@ -56,7 +56,7 @@ export async function hashPassword(password: string, saltHex: string) {
     );
   return hex(
     await crypto.subtle.deriveBits(
-      { name: "PBKDF2", hash: "SHA-256", salt, iterations: 210000 },
+      { name: "PBKDF2", hash: "SHA-256", salt, iterations: 50000 },
       material,
       256,
     ),
