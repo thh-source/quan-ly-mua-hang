@@ -79,7 +79,11 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
     [open, setOpen] = useState(false),
     [tableName, setTableName] = useState("Bảng dữ liệu");
 
-  const apply = (table: HTMLTableElement, labels = labelsFor(table)) => {
+  const apply = (
+    table: HTMLTableElement,
+    labels = labelsFor(table),
+    syncPanel = true,
+  ) => {
     if (!labels.length) return;
     let group = table.querySelector<HTMLTableColElement>(
       "colgroup[data-smart-columns]",
@@ -115,7 +119,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
     });
     table.classList.add("smart-table-enabled");
     table.style.width = `${widths.reduce((sum, width, index) => sum + (prefs.hidden.includes(labels[index]) ? 0 : width), 0)}px`;
-    if (activeRef.current === table) {
+    if (syncPanel && activeRef.current === table) {
       keyRef.current = key;
       setColumns(
         labels.map((label, index) => ({
@@ -128,9 +132,11 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
     }
   };
 
-  const activate = (table: HTMLTableElement) => {
+  const activate = (
+    table: HTMLTableElement,
+    labels = labelsFor(table),
+  ) => {
     activeRef.current = table;
-    const labels = labelsFor(table);
     keyRef.current = tableKey(table, scopeKey);
     setTableName(
       table
@@ -223,23 +229,34 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
           .filter((index) => index >= 0),
         index = indices.at(-1);
       if (index === undefined) return;
-      const label = labelsFor(table)[index];
-      activate(table);
+      const labels = labelsFor(table),
+        label = labels[index];
+      activate(table, labels);
       event.preventDefault();
       const startX = event.clientX,
         startWidth =
           readPreferences(keyRef.current).widths[label] ||
           th.getBoundingClientRect().width;
-      const move = (moveEvent: MouseEvent) => {
+      let resizeFrame = 0,
+        pendingX = startX;
+      const renderWidth = () => {
         const prefs = readPreferences(keyRef.current);
         prefs.widths[label] = Math.max(
           60,
-          Math.min(520, startWidth + moveEvent.clientX - startX),
+          Math.min(520, startWidth + pendingX - startX),
         );
         savePreferences(keyRef.current, prefs);
-        apply(table);
+        apply(table, labels, false);
+      };
+      const move = (moveEvent: MouseEvent) => {
+        pendingX = moveEvent.clientX;
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(renderWidth);
       };
       const up = () => {
+        cancelAnimationFrame(resizeFrame);
+        renderWidth();
+        apply(table, labels, true);
         document.removeEventListener("mousemove", move);
         document.removeEventListener("mouseup", up);
       };

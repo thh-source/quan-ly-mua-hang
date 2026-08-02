@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
 } from "react";
-import * as XLSX from "xlsx";
 import SmartTableTools from "./SmartTableTools";
 
 function AutoGrowTextarea({
@@ -26,6 +25,13 @@ function AutoGrowTextarea({
   useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
+    if (
+      typeof CSS !== "undefined" &&
+      CSS.supports("field-sizing", "content")
+    ) {
+      element.style.height = "auto";
+      return;
+    }
     let frame = 0;
     const grow = () => {
       cancelAnimationFrame(frame);
@@ -365,8 +371,15 @@ export default function ProcurementApp({
   const fileRef = useRef<HTMLInputElement>(null),
     saveRunningRef = useRef(false),
     savePendingRef = useRef(false),
-    latestSaveRef = useRef<{ workspaceId: string; payload: StoredState }>({
+    saveRevisionRef = useRef(0),
+    savedRevisionRef = useRef(-1),
+    latestSaveRef = useRef<{
+      workspaceId: string;
+      payload: StoredState;
+      revision: number;
+    }>({
       workspaceId,
+      revision: 0,
       payload: {
         prs,
         products,
@@ -390,7 +403,7 @@ export default function ProcurementApp({
       while (savePendingRef.current) {
         savePendingRef.current = false;
         const job = latestSaveRef.current;
-        setStorageStatus("Đang tự động lưu...");
+        if (job.revision <= savedRevisionRef.current) continue;
         const response = await fetch(
           `/api/state?workspace=${encodeURIComponent(job.workspaceId)}`,
           {
@@ -401,6 +414,7 @@ export default function ProcurementApp({
           },
         );
         if (!response.ok) throw new Error("SAVE_FAILED");
+        savedRevisionRef.current = job.revision;
         setStorageStatus(
           `Đã lưu lúc ${new Date().toLocaleTimeString("vi-VN")}`,
         );
@@ -412,8 +426,10 @@ export default function ProcurementApp({
     }
   }, []);
   useEffect(() => {
+    saveRevisionRef.current += 1;
     latestSaveRef.current = {
       workspaceId,
+      revision: saveRevisionRef.current,
       payload: {
         prs,
         products,
@@ -708,24 +724,31 @@ export default function ProcurementApp({
       ),
     [items, search, compareOrder, compareFilters, compareSort],
   );
-  const estimated = items.reduce((s, i) => s + i.qty * i.estimate, 0);
-  const comparisonSuppliers = suppliers.filter((s) =>
-    quoteSupplierIds.includes(s.id),
+  const estimated = useMemo(
+    () => items.reduce((sum, item) => sum + item.qty * item.estimate, 0),
+    [items],
   );
-  const availableSuppliers = suppliers.filter(
-    (s) => !quoteSupplierIds.includes(s.id),
-  );
-  const best = (itemId: number) => {
-    const all = comparisonSuppliers
-      .map((s) => ({
-        supplier: s,
-        price: Number(quotes[itemId]?.[s.id]?.price),
-      }))
-      .filter((x) => x.price > 0);
-    return all.length
-      ? all.reduce((a, b) => (b.price < a.price ? b : a))
-      : null;
-  };
+  const comparisonSuppliers = suppliers.filter((supplier) =>
+      quoteSupplierIds.includes(supplier.id),
+    ),
+    availableSuppliers = suppliers.filter(
+      (supplier) => !quoteSupplierIds.includes(supplier.id),
+    );
+  const bestByItem = useMemo(() => {
+      const result = new Map<number, { supplier: Supplier; price: number }>();
+      const selectedSuppliers = suppliers.filter((supplier) =>
+        quoteSupplierIds.includes(supplier.id),
+      );
+      items.forEach((item) => {
+        selectedSuppliers.forEach((supplier) => {
+          const price = Number(quotes[item.id]?.[supplier.id]?.price);
+          if (price > 0 && (!result.has(item.id) || price < result.get(item.id)!.price))
+            result.set(item.id, { supplier, price });
+        });
+      });
+      return result;
+    }, [items, quoteSupplierIds, quotes, suppliers]);
+  const best = (itemId: number) => bestByItem.get(itemId) || null;
   const itemChange = (
     id: number,
     k: keyof Item,
@@ -825,8 +848,9 @@ export default function ProcurementApp({
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
+        const XLSX = await import("xlsx");
         const wb = XLSX.read(reader.result, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<(string | number)[]>(ws, {
@@ -1817,6 +1841,16 @@ function AdvancedItemsTable({
   togglePOItem: (id: number) => void;
 }) {
   const [dragged, setDragged] = useState<ColumnKey | null>(null);
+  const filterValues = useMemo(
+    () =>
+      Object.fromEntries(
+        order.map((column) => [
+          column,
+          [...new Set(items.map((item, row) => String(valueOf(item, column, row))))].filter(Boolean),
+        ]),
+      ) as Record<ColumnKey, string[]>,
+    [items, order],
+  );
   const setSuppliers = (updater: React.SetStateAction<Supplier[]>) => {
     const next = typeof updater === "function" ? updater(suppliers) : updater;
     const removed = suppliers.find((s) => !next.some((n) => n.id === s.id));
@@ -1883,9 +1917,7 @@ function AdvancedItemsTable({
             </th>
             {order.map((col) => {
               const meta = BASE_COLUMNS.find((c) => c.key === col)!;
-              const values = [
-                ...new Set(items.map((i, r) => String(valueOf(i, col, r)))),
-              ].filter(Boolean);
+              const values = filterValues[col];
               return (
                 <th
                   rowSpan={2}
