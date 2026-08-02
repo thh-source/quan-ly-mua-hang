@@ -15,6 +15,18 @@
 .smart-table-enabled th {
   position: relative;
 }
+.smart-table-enabled .head-label {
+  align-items: flex-start;
+  min-width: 0;
+}
+.smart-table-enabled .head-label > button:first-child {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.25;
+}
 .smart-table-enabled th:after {
   content: "";
   position: absolute;
@@ -24,6 +36,12 @@
   height: 100%;
   cursor: col-resize;
   z-index: 15;
+}
+.smart-table-enabled th:hover:after {
+  right: -2px;
+  width: 4px;
+  background: #1672f3;
+  box-shadow: 0 0 0 2px #1672f32c;
 }
 .smart-table-enabled td input:not([type="checkbox"]):not([type="radio"]),
 .smart-table-enabled td select {
@@ -49,6 +67,13 @@
   border-color: var(--blue);
   background: white;
   box-shadow: 0 0 0 2px #1672f322;
+}
+.smart-table-enabled .smart-cell-textarea.category-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .smart-table-tools {
   position: fixed;

@@ -8,7 +8,7 @@ type ColumnInfo = {
   width: number;
   hidden: boolean;
 };
-type Preferences = { widths: Record<number, number>; hidden: number[] };
+type Preferences = { widths: Record<string, number>; hidden: string[] };
 
 function headerGrid(table: HTMLTableElement) {
   const rows = [...(table.tHead?.rows || [])],
@@ -47,16 +47,23 @@ function labelsFor(table: HTMLTableElement) {
   });
 }
 
-function tableKey(table: HTMLTableElement, scopeKey: string, labels: string[]) {
+function tableKey(table: HTMLTableElement, scopeKey: string) {
   const tables = [
     ...document.querySelectorAll<HTMLTableElement>(".app main table"),
   ].filter((item) => item.offsetParent !== null);
-  return `smart-table:${scopeKey}:${Math.max(0, tables.indexOf(table))}:${labels.join("|")}`;
+  return `smart-table:${scopeKey}:${Math.max(0, tables.indexOf(table))}`;
 }
 
 function readPreferences(key: string): Preferences {
   try {
-    return JSON.parse(localStorage.getItem(key) || "") as Preferences;
+    const value = JSON.parse(localStorage.getItem(key) || "") as Partial<Preferences>;
+    return {
+      widths:
+        value.widths && typeof value.widths === "object" ? value.widths : {},
+      hidden: Array.isArray(value.hidden)
+        ? value.hidden.filter((item): item is string => typeof item === "string")
+        : [],
+    };
   } catch {
     return { widths: {}, hidden: [] };
   }
@@ -84,12 +91,12 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
       labels.forEach(() => group!.appendChild(document.createElement("col")));
       table.insertBefore(group, table.firstChild);
     }
-    const key = tableKey(table, scopeKey, labels),
+    const key = tableKey(table, scopeKey),
       prefs = readPreferences(key),
       headerGridRows = headerGrid(table),
       widths = labels.map(
-        (_, index) =>
-          prefs.widths[index] ||
+        (label, index) =>
+          prefs.widths[label] ||
           Math.max(
             80,
             Math.min(
@@ -101,13 +108,13 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
       );
     [...group.children].forEach((node, index) => {
       const col = node as HTMLTableColElement,
-        hidden = prefs.hidden.includes(index);
+        hidden = prefs.hidden.includes(labels[index]);
       col.style.display = hidden ? "none" : "table-column";
       col.style.width = `${widths[index]}px`;
       col.style.minWidth = `${widths[index]}px`;
     });
     table.classList.add("smart-table-enabled");
-    table.style.width = `${widths.reduce((sum, width, index) => sum + (prefs.hidden.includes(index) ? 0 : width), 0)}px`;
+    table.style.width = `${widths.reduce((sum, width, index) => sum + (prefs.hidden.includes(labels[index]) ? 0 : width), 0)}px`;
     if (activeRef.current === table) {
       keyRef.current = key;
       setColumns(
@@ -115,7 +122,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
           index,
           label,
           width: widths[index],
-          hidden: prefs.hidden.includes(index),
+          hidden: prefs.hidden.includes(label),
         })),
       );
     }
@@ -124,7 +131,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
   const activate = (table: HTMLTableElement) => {
     activeRef.current = table;
     const labels = labelsFor(table);
-    keyRef.current = tableKey(table, scopeKey, labels);
+    keyRef.current = tableKey(table, scopeKey);
     setTableName(
       table
         .closest("section")
@@ -137,8 +144,8 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
     const table = activeRef.current;
     if (!table) return;
     const prefs = {
-      widths: Object.fromEntries(next.map((item) => [item.index, item.width])),
-      hidden: next.filter((item) => item.hidden).map((item) => item.index),
+      widths: Object.fromEntries(next.map((item) => [item.label, item.width])),
+      hidden: next.filter((item) => item.hidden).map((item) => item.label),
     };
     savePreferences(keyRef.current, prefs);
     setColumns(next);
@@ -216,15 +223,16 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
           .filter((index) => index >= 0),
         index = indices.at(-1);
       if (index === undefined) return;
+      const label = labelsFor(table)[index];
       activate(table);
       event.preventDefault();
       const startX = event.clientX,
         startWidth =
-          readPreferences(keyRef.current).widths[index] ||
+          readPreferences(keyRef.current).widths[label] ||
           th.getBoundingClientRect().width;
       const move = (moveEvent: MouseEvent) => {
         const prefs = readPreferences(keyRef.current);
-        prefs.widths[index] = Math.max(
+        prefs.widths[label] = Math.max(
           60,
           Math.min(520, startWidth + moveEvent.clientX - startX),
         );

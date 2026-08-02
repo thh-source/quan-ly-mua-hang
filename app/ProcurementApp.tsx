@@ -771,19 +771,26 @@ export default function ProcurementApp({
               </>
             )}
           </div>
-          <div className="user">
-            <i>{currentUser?.displayName?.slice(0, 2).toUpperCase() || "BC"}</i>
-            <div>
-              <b>{currentUser?.displayName || "Báo cáo"}</b>
-              <small>
-                {currentUser
-                  ? currentUser.role === "master"
-                    ? "Master Admin"
-                    : currentUser.role === "admin"
-                      ? "Admin"
-                      : "Người dùng"
-                  : "Chỉ xem"}
-              </small>
+          <div className="header-actions">
+            {!reportMode && (
+              <button className="header-share-report" onClick={openShareReport}>
+                ↗ Tạo link theo dõi
+              </button>
+            )}
+            <div className="user">
+              <i>{currentUser?.displayName?.slice(0, 2).toUpperCase() || "BC"}</i>
+              <div>
+                <b>{currentUser?.displayName || "Báo cáo"}</b>
+                <small>
+                  {currentUser
+                    ? currentUser.role === "master"
+                      ? "Master Admin"
+                      : currentUser.role === "admin"
+                        ? "Admin"
+                        : "Người dùng"
+                    : "Chỉ xem"}
+                </small>
+              </div>
             </div>
           </div>
         </header>
@@ -814,9 +821,6 @@ export default function ProcurementApp({
                 onChange={uploadGeneralFile}
               />
             </label>
-            <button className="share-report-launch" onClick={openShareReport}>
-              ↗ Tạo link báo cáo
-            </button>
           </>
         )}
         {view === "dashboard" && (
