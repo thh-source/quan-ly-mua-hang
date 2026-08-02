@@ -1,6 +1,17 @@
 .smart-table-enabled {
   table-layout: fixed !important;
 }
+.smart-table-enabled thead {
+  position: sticky;
+  top: 0;
+  z-index: 18;
+}
+.smart-table-enabled thead th,
+.smart-table-enabled thead tr:nth-child(2) th {
+  position: relative !important;
+  top: auto !important;
+  z-index: auto;
+}
 .smart-table-enabled th,
 .smart-table-enabled td {
   height: auto !important;
