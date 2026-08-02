@@ -266,6 +266,10 @@ export default function ProcurementApp({
     [currentPO, setCurrentPO] = useState<PO>(emptyPO);
   const [storageReady, setStorageReady] = useState(false),
     [storageStatus, setStorageStatus] = useState("Đang kết nối dữ liệu...");
+  const [workspaceId, setWorkspaceId] = useState(currentUser?.id || ""),
+    [workspaceUsers, setWorkspaceUsers] = useState<
+      { id: string; displayName: string; username: string; role: string }[]
+    >([]);
   const [compareOrder, setCompareOrder] = useState<ColumnKey[]>(
       BASE_COLUMNS.map((c) => c.key),
     ),
@@ -285,10 +289,22 @@ export default function ProcurementApp({
   });
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
+    if (
+      reportMode ||
+      !currentUser ||
+      (currentUser.role !== "master" && currentUser.role !== "admin")
+    )
+      return;
+    fetch("/api/users")
+      .then((response) => response.json())
+      .then((body) => setWorkspaceUsers(body.users || []))
+      .catch(() => setWorkspaceUsers([]));
+  }, [currentUser, reportMode]);
+  useEffect(() => {
     let active = true;
     const url = reportToken
       ? `/api/report-state?token=${encodeURIComponent(reportToken)}`
-      : "/api/state";
+      : `/api/state?workspace=${encodeURIComponent(workspaceId)}`;
     fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error();
@@ -309,6 +325,16 @@ export default function ProcurementApp({
           );
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
+        } else {
+          setPrs([]);
+          setProducts([]);
+          setSuppliers([]);
+          setQuotes({});
+          setPos([]);
+          setItems([]);
+          setQuoteSupplierIds([]);
+          setSelectedPR(emptyPR);
+          setCurrentPO(emptyPO);
         }
         setStorageReady(true);
         setStorageStatus(data ? "Đã đồng bộ online" : "Sẵn sàng lưu online");
@@ -317,12 +343,12 @@ export default function ProcurementApp({
     return () => {
       active = false;
     };
-  }, [reportToken]);
+  }, [reportToken, workspaceId]);
   useEffect(() => {
     if (!storageReady || reportMode) return;
     const timer = setTimeout(() => {
       setStorageStatus("Đang lưu...");
-      fetch("/api/state", {
+      fetch(`/api/state?workspace=${encodeURIComponent(workspaceId)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -352,6 +378,7 @@ export default function ProcurementApp({
     pos,
     items,
     quoteSupplierIds,
+    workspaceId,
   ]);
   const uploadGeneralFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -361,6 +388,7 @@ export default function ProcurementApp({
     form.append("file", file);
     form.append("entityType", "general");
     form.append("entityId", "procurement");
+    form.append("workspaceId", workspaceId);
     try {
       const response = await fetch("/api/files", {
         method: "POST",
@@ -772,6 +800,25 @@ export default function ProcurementApp({
             )}
           </div>
           <div className="header-actions">
+            {!reportMode && workspaceUsers.length > 0 && (
+              <label className="workspace-picker">
+                <span>Môi trường</span>
+                <select
+                  value={workspaceId}
+                  onChange={(event) => {
+                    setStorageReady(false);
+                    setStorageStatus("Đang mở môi trường làm việc...");
+                    setWorkspaceId(event.target.value);
+                  }}
+                >
+                  {workspaceUsers.map((workspaceUser) => (
+                    <option key={workspaceUser.id} value={workspaceUser.id}>
+                      {workspaceUser.displayName} ({workspaceUser.username})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {!reportMode && (
               <button className="header-share-report" onClick={openShareReport}>
                 ↗ Tạo link theo dõi

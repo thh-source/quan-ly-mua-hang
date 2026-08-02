@@ -1,4 +1,5 @@
 import {getChatGPTUser} from "../../chatgpt-auth";
+import {readWorkspace,resolveWorkspace,stateId} from "../../state-store";
 
 async function bindings(){return (await import("cloudflare:workers")).env}
 
@@ -14,22 +15,23 @@ async function ensureSchema(){
 export async function GET(request:Request){
  const user=await getChatGPTUser();if(!user)return Response.json({error:"Không có quyền truy cập"},{status:401});
  await ensureSchema();
- const env=await bindings();
- const row=await env.DB.prepare("SELECT payload, updated_at, version FROM app_state WHERE id = ?").bind("procurement").first<{payload:string;updated_at:string;version:number}>();
+ const workspaceId=await resolveWorkspace(user,new URL(request.url).searchParams.get("workspace"));
+ const row=await readWorkspace(workspaceId,user.role==="master");
  if(!row)return Response.json({data:null,updatedAt:null,version:0});
- return Response.json({data:JSON.parse(row.payload),updatedAt:row.updated_at,version:row.version});
+ return Response.json({data:JSON.parse(row.payload),updatedAt:row.updated_at,version:row.version,workspaceId});
 }
 
 export async function PUT(request:Request){
  const user=await getChatGPTUser();if(!user)return Response.json({error:"Yêu cầu đăng nhập"},{status:401});
  await ensureSchema();
  const env=await bindings();
+ const workspaceId=await resolveWorkspace(user,new URL(request.url).searchParams.get("workspace"));
  const data=await request.json();
  const now=new Date().toISOString(),payload=JSON.stringify(data);
  if(payload.length>1_800_000)return Response.json({error:"Dữ liệu vượt giới hạn cho phép"},{status:413});
  await env.DB.batch([
-  env.DB.prepare("INSERT INTO app_state (id,payload,updated_at,version) VALUES (?,?,?,1) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at,version=app_state.version+1").bind("procurement",payload,now),
-  env.DB.prepare("INSERT INTO audit_logs (action,entity_type,entity_id,created_at) VALUES (?,?,?,?)").bind("SAVE","application","procurement",now),
+  env.DB.prepare("INSERT INTO app_state (id,payload,updated_at,version) VALUES (?,?,?,1) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload,updated_at=excluded.updated_at,version=app_state.version+1").bind(stateId(workspaceId),payload,now),
+  env.DB.prepare("INSERT INTO audit_logs (action,entity_type,entity_id,created_at) VALUES (?,?,?,?)").bind("SAVE","application",stateId(workspaceId),now),
  ]);
  return Response.json({ok:true,updatedAt:now});
 }
