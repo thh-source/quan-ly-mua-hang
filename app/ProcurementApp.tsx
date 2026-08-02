@@ -1,5 +1,12 @@
 "use client";
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as XLSX from "xlsx";
 import SmartTableTools from "./SmartTableTools";
 
@@ -15,11 +22,26 @@ function AutoGrowTextarea({
   placeholder?: string;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = ref.current;
     if (!element) return;
-    element.style.height = "0px";
-    element.style.height = `${Math.max(32, element.scrollHeight)}px`;
+    let frame = 0;
+    const grow = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        element.style.height = "0px";
+        element.style.height = `${Math.max(32, element.scrollHeight + 2)}px`;
+      });
+    };
+    grow();
+    const observer = new ResizeObserver(grow);
+    observer.observe(element.parentElement || element);
+    window.addEventListener("resize", grow);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", grow);
+      cancelAnimationFrame(frame);
+    };
   }, [value]);
   return (
     <textarea
