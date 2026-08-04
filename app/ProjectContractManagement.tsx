@@ -148,21 +148,33 @@ export default function ProjectContractManagement({
       ).length,
     0,
   );
-  const paymentTimeline = (selectedContract?.payments || [])
-    .filter((payment) => payment.dueDate || payment.paidDate)
-    .map((payment) => ({
-      id: payment.id,
-      date: payment.paidDate || payment.dueDate,
-      title: payment.phase,
-      note: `${payment.method} · ${payment.status} · ${fmt(payment.amount)} ₫`,
-      state:
-        payment.status === "Đã thanh toán"
-          ? "done"
-          : payment.status === "Quá hạn"
-            ? "late"
-            : "todo",
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+  const paymentTimeline = [
+    ...(selectedContract?.contractDate
+      ? [
+          {
+            id: `contract-${selectedContract.id}`,
+            date: selectedContract.contractDate,
+            title: "Ký hợp đồng",
+            note: `${selectedContract.contractNo || "Chưa có số HĐ"} · ${selectedContract.supplierName || "Chưa nhập NCC"}`,
+            state: "done",
+          },
+        ]
+      : []),
+    ...(selectedContract?.payments || [])
+      .filter((payment) => payment.dueDate || payment.paidDate)
+      .map((payment) => ({
+        id: payment.id,
+        date: payment.paidDate || payment.dueDate,
+        title: payment.phase,
+        note: `${payment.method} · ${payment.status} · ${fmt(payment.amount)} ₫`,
+        state:
+          payment.status === "Đã thanh toán"
+            ? "done"
+            : payment.status === "Quá hạn"
+              ? "late"
+              : "todo",
+      })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
   const leadtimeTimeline = (selectedContract?.milestones || [])
     .filter((milestone) => milestone.plannedDate || milestone.actualDate)
     .map((milestone) => ({
@@ -347,7 +359,7 @@ function ContractEditor({
   contract: ProjectContract;
   onChange: (next: ProjectContract) => void;
   onDelete: () => void;
-  timeline: { id: number; date: string; title: string; note: string; state: string }[];
+  timeline: { id: number | string; date: string; title: string; note: string; state: string }[];
   leadtimeTimeline: { id: number; date: string; title: string; note: string; status: string }[];
 }) {
   const total = contract.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
@@ -379,6 +391,21 @@ function ContractEditor({
         </div>
         {contract.folderLink && <a className="folder-link" href={contract.folderLink} target="_blank">Mở thư mục hồ sơ ↗</a>}
       </div>
+      <section className="project-contract-card project-timeline-row">
+        <div className="section-row-head">
+          <div><span>TIMELINE</span><h2>Ký hợp đồng & thanh toán</h2></div>
+        </div>
+        <VisualTimeline
+          empty="Chưa có ngày hợp đồng hoặc mốc thanh toán."
+          items={timeline.map((event) => ({
+            id: event.id,
+            date: event.date,
+            title: event.title,
+            note: event.note,
+            status: event.state === "done" ? "done" : event.state === "late" ? "late" : "todo",
+          }))}
+        />
+      </section>
       <div className="project-contract-card">
         <div className="section-row-head">
           <div><span>DANH SÁCH HÀNG</span><h2>Thiết bị / hàng hóa</h2></div>
@@ -424,19 +451,6 @@ function ContractEditor({
               </article>
             ))}
           </div>
-        </section>
-        <section className="project-contract-card">
-          <div className="section-row-head"><div><span>TIMELINE</span><h2>Thanh toán</h2></div></div>
-          <VisualTimeline
-            empty="Chưa có mốc thanh toán."
-            items={timeline.map((event) => ({
-              id: event.id,
-              date: event.date,
-              title: event.title,
-              note: event.note,
-              status: event.state === "done" ? "done" : event.state === "late" ? "late" : "todo",
-            }))}
-          />
         </section>
       </div>
       <div className="project-contract-card">
