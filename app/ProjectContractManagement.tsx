@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import VisualTimeline from "./VisualTimeline";
 
 export type ProjectContractItem = {
   id: number;
@@ -162,6 +163,23 @@ export default function ProjectContractManagement({
             : "todo",
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+  const leadtimeTimeline = (selectedContract?.milestones || [])
+    .filter((milestone) => milestone.plannedDate || milestone.actualDate)
+    .map((milestone) => ({
+      id: milestone.id,
+      date: milestone.actualDate || milestone.plannedDate,
+      title: milestone.name,
+      note: `${milestone.status}${milestone.note ? ` · ${milestone.note}` : ""}`,
+      status:
+        milestone.status === "Hoàn thành"
+          ? "done"
+          : milestone.status === "Trễ hạn"
+            ? "late"
+            : milestone.status === "Đang xử lý"
+              ? "doing"
+              : "todo",
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
   const update = (nextProjects: ProjectContractProject[]) =>
     onChange({ projects: nextProjects });
   const addProject = () => {
@@ -303,6 +321,7 @@ export default function ProjectContractManagement({
                     onChange={(next) => updateContractList(selectedContract.id, next)}
                     onDelete={() => removeContract(selectedContract.id)}
                     timeline={paymentTimeline}
+                    leadtimeTimeline={leadtimeTimeline}
                   />
                 ) : (
                   <section className="project-empty">Chọn hoặc thêm hợp đồng để nhập thông tin.</section>
@@ -323,11 +342,13 @@ function ContractEditor({
   onChange,
   onDelete,
   timeline,
+  leadtimeTimeline,
 }: {
   contract: ProjectContract;
   onChange: (next: ProjectContract) => void;
   onDelete: () => void;
   timeline: { id: number; date: string; title: string; note: string; state: string }[];
+  leadtimeTimeline: { id: number; date: string; title: string; note: string; status: string }[];
 }) {
   const total = contract.items.reduce((sum, item) => sum + item.qty * item.unitPrice, 0);
   const itemChange = (id: number, patch: Partial<ProjectContractItem>) =>
@@ -383,6 +404,13 @@ function ContractEditor({
       <div className="project-contract-grid">
         <section className="project-contract-card">
           <div className="section-row-head"><div><span>LEADTIME</span><h2>DQ / FAT / SAT / Giao hàng</h2></div></div>
+          <VisualTimeline
+            empty="Chưa có mốc DQ/FAT/SAT/giao hàng."
+            items={leadtimeTimeline.map((event) => ({
+              ...event,
+              status: event.status as "done" | "doing" | "late" | "todo",
+            }))}
+          />
           <div className="milestone-list">
             {contract.milestones.map((milestone) => (
               <article key={milestone.id}>
@@ -399,13 +427,16 @@ function ContractEditor({
         </section>
         <section className="project-contract-card">
           <div className="section-row-head"><div><span>TIMELINE</span><h2>Thanh toán</h2></div></div>
-          <div className="payment-timeline">
-            {timeline.length ? timeline.map((event) => (
-              <article key={event.id} className={event.state}>
-                <time>{event.date}</time><i/><div><b>{event.title}</b><p>{event.note}</p></div>
-              </article>
-            )) : <p>Chưa có mốc thanh toán.</p>}
-          </div>
+          <VisualTimeline
+            empty="Chưa có mốc thanh toán."
+            items={timeline.map((event) => ({
+              id: event.id,
+              date: event.date,
+              title: event.title,
+              note: event.note,
+              status: event.state === "done" ? "done" : event.state === "late" ? "late" : "todo",
+            }))}
+          />
         </section>
       </div>
       <div className="project-contract-card">

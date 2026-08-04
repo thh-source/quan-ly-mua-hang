@@ -13,6 +13,7 @@ import ProjectContractManagement, {
   type ProjectContractWorkspace,
 } from "./ProjectContractManagement";
 import SmartTableTools from "./SmartTableTools";
+import VisualTimeline from "./VisualTimeline";
 
 function AutoGrowTextarea({
   value,
@@ -3126,16 +3127,21 @@ function ContractManagement({
           </div>
           {tab === "timeline" && (
             <div className="contract-timeline">
-              {events.map((e, i) => (
-                <article key={i} className={e.state}>
-                  <time>{dateVN(e.date)}</time>
-                  <i />
-                  <div>
-                    <b>{e.title}</b>
-                    <p>{e.note}</p>
-                  </div>
-                </article>
-              ))}
+              <VisualTimeline
+                empty="Chưa có mốc giao hàng hoặc thanh toán."
+                items={events.map((e, i) => ({
+                  id: i,
+                  date: e.date,
+                  title: e.title,
+                  note: e.note,
+                  status:
+                    e.state === "done"
+                      ? "done"
+                      : e.state === "warning"
+                        ? "late"
+                        : "todo",
+                }))}
+              />
             </div>
           )}
           {tab === "documents" && (
@@ -4397,20 +4403,16 @@ function PODetail({
           </div>
         </div>
         <div className="timeline">
-          {events.length ? (
-            events.map((e, i) => (
-              <article key={i} className={e.kind}>
-                <time>{dateVN(e.date)}</time>
-                <i />
-                <div>
-                  <b>{e.title}</b>
-                  <p>{e.note}</p>
-                </div>
-              </article>
-            ))
-          ) : (
-            <p>Chưa có sự kiện giao hàng hoặc thanh toán.</p>
-          )}
+          <VisualTimeline
+            empty="Chưa có sự kiện giao hàng hoặc thanh toán."
+            items={events.map((e, i) => ({
+              id: i,
+              date: e.date,
+              title: e.title,
+              note: e.note,
+              status: e.kind === "payment" ? "done" : "doing",
+            }))}
+          />
         </div>
       </section>
     </section>
