@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type React from "react";
 import DocumentManager from "./DocumentManager";
 import ProjectContractManagement, {
   type ProjectContractWorkspace,
@@ -119,6 +120,27 @@ type POCartLine = {
   price: number;
   allocation: POAllocation;
 };
+type ApprovalRow = {
+  id: string;
+  prNumber: string;
+  code: string;
+  name: string;
+  qty: number;
+  unit: string;
+  selectedSupplierId: number;
+  prices: Record<number, number>;
+};
+type ApprovalDraft = {
+  number: string;
+  date: string;
+  department: string;
+  prNumbers: string;
+  purpose: string;
+  intro: string;
+  rows: ApprovalRow[];
+  supplierIds: number[];
+  note: string;
+};
 type PODoc = {
   id: number;
   name: string;
@@ -165,6 +187,7 @@ type View =
   | "po-detail"
   | "contracts"
   | "project-contracts"
+  | "approval"
   | "products"
   | "trash"
   | "settings";
@@ -336,6 +359,7 @@ export default function ProcurementApp({
     [currentPO, setCurrentPO] = useState<PO>(emptyPO);
   const [poCart, setPoCart] = useState<POCartLine[]>([]),
     [poCartOpen, setPoCartOpen] = useState(false);
+  const [approvalDraft, setApprovalDraft] = useState<ApprovalDraft | null>(null);
   const [projectContracts, setProjectContracts] =
     useState<ProjectContractWorkspace>({ projects: [] });
   const [trash, setTrash] = useState<TrashItem[]>([]),
@@ -993,6 +1017,47 @@ export default function ProcurementApp({
     ]);
     setPoSelections((selected) => [...selected, id]);
   };
+  const openApproval = () => {
+    if (!poCart.length) return;
+    const sourcePRs = [...new Set(poCart.map((line) => line.allocation.prNumber))],
+      supplierIds = [
+        ...new Set([
+          ...quoteSupplierIds.filter((id) =>
+            poCart.some((line) => Number(quotes[line.item.id]?.[id]?.price) > 0),
+          ),
+          poCart[0].supplierId,
+        ]),
+      ],
+      rows: ApprovalRow[] = poCart.map((line) => {
+        const prices: Record<number, number> = {};
+        supplierIds.forEach((supplierId) => {
+          prices[supplierId] = Number(quotes[line.item.id]?.[supplierId]?.price || 0);
+        });
+        return {
+          id: line.id,
+          prNumber: line.allocation.prNumber,
+          code: line.item.code,
+          name: line.item.name,
+          qty: line.allocation.qty,
+          unit: line.item.unit,
+          selectedSupplierId: line.supplierId,
+          prices,
+        };
+      });
+    setApprovalDraft({
+      number: selectedPR.number || sourcePRs.join(", "),
+      date: new Date().toISOString().slice(0, 10),
+      department: selectedPR.department || "Phòng Cung Ứng",
+      prNumbers: sourcePRs.join(", "),
+      purpose: selectedPR.purpose || "phục vụ hoạt động mua hàng của công ty",
+      intro: `Theo yêu cầu mua hàng phục vụ ${selectedPR.purpose || "công việc của các bộ phận"}. Phòng Cung Ứng đã tìm kiếm, đánh giá và đề xuất phương án như sau:`,
+      rows,
+      supplierIds,
+      note: "",
+    });
+    setPoCartOpen(false);
+    setView("approval");
+  };
   const createPO = () => {
     if (!poCart.length) return;
     const supplier = suppliers.find((s) => s.id === poCart[0].supplierId);
@@ -1357,6 +1422,15 @@ export default function ProcurementApp({
             onChange={setProjectContracts}
           />
         )}
+        {view === "approval" && approvalDraft && !reportMode && (
+          <ApprovalSheet
+            draft={approvalDraft}
+            setDraft={setApprovalDraft}
+            suppliers={suppliers}
+            onBack={() => setView("compare")}
+            onCreatePO={createPO}
+          />
+        )}
         {view === "products" && (
           <ProductCatalog
             products={products}
@@ -1631,7 +1705,7 @@ export default function ProcurementApp({
               </div>
               <div>
                 <button className="ghost" onClick={() => setPoCartOpen(false)}>Tiếp tục chọn PR khác</button>
-                <button className="po-create-btn" disabled={!poCart.length || poCart.some((line) => line.allocation.qty <= 0)} onClick={createPO}>Phát hành PO</button>
+                <button className="po-create-btn" disabled={!poCart.length || poCart.some((line) => line.allocation.qty <= 0)} onClick={openApproval}>Lập phê duyệt</button>
               </div>
             </footer>
           </div>
@@ -3188,6 +3262,175 @@ function ContractManagement({
               vào PO.
             </div>
           )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function EditableCell({
+  children,
+  className = "",
+  colSpan,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  colSpan?: number;
+}) {
+  return (
+    <td
+      className={className}
+      colSpan={colSpan}
+      contentEditable
+      suppressContentEditableWarning
+    >
+      {children}
+    </td>
+  );
+}
+
+function ApprovalSheet({
+  draft,
+  setDraft,
+  suppliers,
+  onBack,
+  onCreatePO,
+}: {
+  draft: ApprovalDraft;
+  setDraft: React.Dispatch<React.SetStateAction<ApprovalDraft | null>>;
+  suppliers: Supplier[];
+  onBack: () => void;
+  onCreatePO: () => void;
+}) {
+  const chosenSuppliers = draft.supplierIds
+      .map((id) => suppliers.find((supplier) => supplier.id === id))
+      .filter(Boolean) as Supplier[],
+    totalSelected = draft.rows.reduce(
+      (sum, row) => sum + row.qty * (row.prices[row.selectedSupplierId] || 0),
+      0,
+    ),
+    update = (patch: Partial<ApprovalDraft>) =>
+      setDraft((current) => (current ? { ...current, ...patch } : current)),
+    addRow = () =>
+      update({
+        rows: [
+          ...draft.rows,
+          {
+            id: crypto.randomUUID(),
+            prNumber: draft.prNumbers,
+            code: "",
+            name: "",
+            qty: 0,
+            unit: "",
+            selectedSupplierId: draft.supplierIds[0] || 0,
+            prices: {},
+          },
+        ],
+      }),
+    removeRow = (id: string) =>
+      update({ rows: draft.rows.filter((row) => row.id !== id) });
+  return (
+    <section className="content approval-page">
+      <div className="approval-toolbar">
+        <div>
+          <em>ĐỀ NGHỊ PHÊ DUYỆT</em>
+          <h1>Bản phê duyệt lựa chọn NCC</h1>
+          <p>Sửa trực tiếp trong biểu mẫu, in trình ký, sau đó phát hành PO.</p>
+        </div>
+        <div>
+          <button className="ghost" onClick={onBack}>← Quay lại so sánh giá</button>
+          <button className="ghost" onClick={() => window.print()}>In bản phê duyệt</button>
+          <button className="primary" onClick={onCreatePO}>Phát hành PO</button>
+        </div>
+      </div>
+      <div className="approval-sheet-wrap">
+        <div className="approval-sheet">
+          <header>
+            <div className="approval-logo">
+              <img src="/phenikaa-logo.png" alt="Phenikaa Pharma" />
+            </div>
+            <h2>ĐỀ NGHỊ PHÊ DUYỆT LỰA CHỌN NCC</h2>
+          </header>
+          <div className="approval-meta">
+            <label>Số PR:<input value={draft.number} onChange={(e) => update({ number: e.target.value })}/></label>
+            <label>Ngày:<input type="date" value={draft.date} onChange={(e) => update({ date: e.target.value })}/></label>
+            <label>Đơn vị lập biểu mẫu:<input value={draft.department} onChange={(e) => update({ department: e.target.value })}/></label>
+            <label>Ghi chú: Căn cứ theo PR số:<input value={draft.prNumbers} onChange={(e) => update({ prNumbers: e.target.value })}/></label>
+          </div>
+          <div className="approval-recipient" contentEditable suppressContentEditableWarning>
+            Kính gửi: BAN LÃNH ĐẠO CÔNG TY
+          </div>
+          <textarea
+            className="approval-intro"
+            value={draft.intro}
+            onChange={(e) => update({ intro: e.target.value })}
+          />
+          <div className="approval-section-title">I. Tên hàng hóa</div>
+          <div className="approval-table-wrap">
+            <table className="approval-table">
+              <thead>
+                <tr>
+                  <th rowSpan={2}>STT</th>
+                  <th rowSpan={2}>Hàng hóa</th>
+                  <th rowSpan={2}>Số lượng</th>
+                  <th rowSpan={2}>ĐVT</th>
+                  {chosenSuppliers.map((supplier) => (
+                    <th key={supplier.id} colSpan={2}>
+                      NCC {draft.rows.some((row) => row.selectedSupplierId === supplier.id) ? "lựa chọn: " : ""}
+                      {supplier.name}
+                    </th>
+                  ))}
+                  <th rowSpan={2}>Xóa</th>
+                </tr>
+                <tr>
+                  {chosenSuppliers.flatMap((supplier) => [
+                    <th key={`${supplier.id}-price`}>Đơn giá (VNĐ)</th>,
+                    <th key={`${supplier.id}-amount`}>Thành tiền</th>,
+                  ])}
+                </tr>
+              </thead>
+              <tbody>
+                {draft.rows.map((row, index) => (
+                  <tr key={row.id}>
+                    <EditableCell className="center">{index + 1}</EditableCell>
+                    <EditableCell>{row.name}</EditableCell>
+                    <EditableCell className="center">{row.qty}</EditableCell>
+                    <EditableCell className="center">{row.unit}</EditableCell>
+                    {chosenSuppliers.flatMap((supplier) => {
+                      const selected = row.selectedSupplierId === supplier.id,
+                        price = row.prices[supplier.id] || 0;
+                      return [
+                        <EditableCell key={`${row.id}-${supplier.id}-price`} className={selected ? "selected-supplier money" : "money"}>
+                          {price ? fmt(price) : ""}
+                        </EditableCell>,
+                        <EditableCell key={`${row.id}-${supplier.id}-amount`} className={selected ? "selected-supplier money" : "money"}>
+                          {price ? fmt(price * row.qty) : ""}
+                        </EditableCell>,
+                      ];
+                    })}
+                    <td className="approval-row-action"><button onClick={() => removeRow(row.id)}>×</button></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4}>Tổng giá trị đề xuất</td>
+                  <td colSpan={Math.max(1, chosenSuppliers.length * 2)} className="money">{fmt(totalSelected)} VNĐ</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <button className="approval-add-row" onClick={addRow}>＋ Thêm dòng thủ công</button>
+          <div className="approval-note">
+            <b>II. Ghi chú / Đề xuất</b>
+            <textarea value={draft.note} onChange={(e) => update({ note: e.target.value })} placeholder="Nhập ghi chú lựa chọn NCC, lý do chọn, điều kiện thương mại..."/>
+          </div>
+          <div className="approval-sign">
+            <div><b>Người lập</b><span contentEditable suppressContentEditableWarning></span></div>
+            <div><b>Trưởng bộ phận</b><span contentEditable suppressContentEditableWarning></span></div>
+            <div><b>Ban lãnh đạo</b><span contentEditable suppressContentEditableWarning></span></div>
+          </div>
         </div>
       </div>
     </section>
