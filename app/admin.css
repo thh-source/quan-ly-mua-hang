@@ -229,8 +229,96 @@
   background: #fff;
   color: #36506c;
 }
+.usage-card {
+  margin-bottom: 16px;
+}
+.usage-card .section-heading button {
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--blue);
+  padding: 0 11px;
+  font-size: 11px;
+  font-weight: 750;
+}
+.usage-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.usage-grid article {
+  border: 1px solid #dfe7f0;
+  border-radius: 8px;
+  background: #fbfdff;
+  padding: 14px;
+}
+.usage-grid article > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.usage-grid b {
+  font-size: 13px;
+}
+.usage-grid small,
+.usage-grid p,
+.usage-grid footer span {
+  color: var(--muted);
+  font-size: 11px;
+}
+.usage-grid article > strong {
+  display: block;
+  margin: 13px 0 9px;
+  color: var(--blue);
+  font-size: 25px;
+}
+.usage-bar {
+  height: 9px;
+  border-radius: 999px;
+  background: #e6edf5;
+  overflow: hidden;
+}
+.usage-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #168446, #37b76b);
+}
+.usage-grid footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 8px;
+}
+.usage-grid footer b {
+  font-size: 11px;
+  color: var(--ink);
+  text-align: right;
+}
+.usage-grid p {
+  line-height: 1.55;
+  margin: 12px 0 0;
+}
+.usage-note,
+.usage-empty {
+  margin-top: 12px;
+  border-radius: 7px;
+  background: #eef6ff;
+  color: #315d87;
+  padding: 11px 12px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.usage-note b {
+  color: #0a61c9;
+}
 @media (max-width: 850px) {
   .admin-grid {
+    grid-template-columns: 1fr;
+  }
+  .usage-grid {
     grid-template-columns: 1fr;
   }
   .admin-form {
