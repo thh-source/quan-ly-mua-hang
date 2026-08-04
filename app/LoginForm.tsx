@@ -27,7 +27,7 @@ export default function LoginForm() {
     <main className="login-page">
       <form onSubmit={submit}>
         <div className="login-brand">
-          <img src="/brand/phenikaa-logo.png" alt="Phenikaa Pharma" />
+          <img src="/phenikaa-logo.png" alt="Phenikaa Pharma" />
         </div>
         <em>PHENIKAA PHARMA</em>
         <h1>Đăng nhập</h1>

@@ -1162,7 +1162,7 @@ export default function ProcurementApp({
       <aside>
         <div className="brand">
           <span>
-            <img src="/brand/phenikaa-logo.png" alt="Phenikaa" />
+            <img src="/phenikaa-logo.png" alt="Phenikaa" />
           </span>
           <b>
             <strong>PHENIKAA</strong>
