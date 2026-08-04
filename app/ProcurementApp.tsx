@@ -1161,8 +1161,13 @@ export default function ProcurementApp({
       <SmartTableTools scopeKey={view} />
       <aside>
         <div className="brand">
-          <span>◆</span>
-          <b>{reportMode ? "BÁO CÁO" : "MUA SẮM"}</b>
+          <span>
+            <img src="/brand/phenikaa-logo.png" alt="Phenikaa" />
+          </span>
+          <b>
+            <strong>PHENIKAA</strong>
+            <small>{reportMode ? "Báo cáo chỉ xem" : "Procurement"}</small>
+          </b>
         </div>
         <nav>
           {visibleNav.map((n) => (

@@ -26,10 +26,12 @@ export default function LoginForm() {
   return (
     <main className="login-page">
       <form onSubmit={submit}>
-        <div className="login-brand">◆</div>
-        <em>HỆ THỐNG MUA HÀNG</em>
+        <div className="login-brand">
+          <img src="/brand/phenikaa-logo.png" alt="Phenikaa Pharma" />
+        </div>
+        <em>PHENIKAA PHARMA</em>
         <h1>Đăng nhập</h1>
-        <p>Sử dụng tài khoản do Master Admin cấp.</p>
+        <p>Hệ thống quản lý mua sắm, PR, PO, hợp đồng và hồ sơ thanh toán.</p>
         <label>
           ID người dùng
           <input name="username" autoComplete="username" required autoFocus />
