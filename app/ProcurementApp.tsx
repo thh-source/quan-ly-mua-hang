@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import DocumentManager from "./DocumentManager";
 import SmartTableTools from "./SmartTableTools";
 
 function AutoGrowTextarea({
@@ -572,27 +573,6 @@ export default function ProcurementApp({
       window.removeEventListener("pagehide", flush);
     };
   }, [persistState, reportMode, storageReady]);
-  const uploadGeneralFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setStorageStatus(`Đang tải ${file.name}...`);
-    const form = new FormData();
-    form.append("file", file);
-    form.append("entityType", "general");
-    form.append("entityId", "procurement");
-    form.append("workspaceId", workspaceId);
-    try {
-      const response = await fetch("/api/files", {
-        method: "POST",
-        body: form,
-      });
-      if (!response.ok) throw new Error();
-      setStorageStatus(`Đã lưu file ${file.name}`);
-    } catch {
-      setStorageStatus("Tải file thất bại");
-    }
-    event.target.value = "";
-  };
   const openShareReport = async () => {
     setStorageStatus("Đang tạo link báo cáo...");
     try {
@@ -1317,15 +1297,6 @@ export default function ProcurementApp({
               <i>●</i>
               {storageStatus}
             </div>
-            <label className="storage-upload-launch">
-              ⇧ Tải hồ sơ lên
-              <input
-                type="file"
-                hidden
-                accept=".xlsx,.xls,.pdf,.doc,.docx,.jpg,.jpeg,.png"
-                onChange={uploadGeneralFile}
-              />
-            </label>
           </>
         )}
         {view === "dashboard" && (
@@ -1348,6 +1319,9 @@ export default function ProcurementApp({
             }}
             onUpdate={updatePO}
             onDelete={reportMode ? undefined : (po) => requestDelete("CONTRACT", po)}
+            workspaceId={workspaceId}
+            readOnly={reportMode}
+            onStatus={setStorageStatus}
           />
         )}
         {view === "products" && (
@@ -1413,6 +1387,9 @@ export default function ProcurementApp({
             setSuppliers={setSuppliers}
             onUpdate={updatePO}
             onBack={() => setView("po-list")}
+            workspaceId={workspaceId}
+            readOnly={reportMode}
+            onStatus={setStorageStatus}
           />
         )}
         {view === "compare" && (
@@ -1544,6 +1521,15 @@ export default function ProcurementApp({
               Tích chọn một hoặc nhiều mặt hàng cùng nhà cung cấp để tạo PO. Nếu
               chọn mặt hàng thuộc NCC khác, hệ thống sẽ bắt đầu nhóm mới.
             </small>
+            {!reportMode && selectedPR.id !== 0 && (
+              <DocumentManager
+                title={`Hồ sơ PR ${selectedPR.number}`}
+                entityType="pr"
+                entityId={String(selectedPR.id)}
+                workspaceId={workspaceId}
+                onStatus={setStorageStatus}
+              />
+            )}
           </section>
         )}
       </main>
@@ -2837,12 +2823,18 @@ function ContractManagement({
   onOpenPO,
   onUpdate,
   onDelete,
+  workspaceId,
+  readOnly = false,
+  onStatus,
 }: {
   pos: PO[];
   suppliers: Supplier[];
   onOpenPO: (po: PO) => void;
   onUpdate: (po: PO) => void;
   onDelete?: (po: PO) => void;
+  workspaceId: string;
+  readOnly?: boolean;
+  onStatus?: (message: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState(pos[0]?.id || 0),
     [tab, setTab] = useState<"timeline" | "documents" | "invoices">("timeline"),
@@ -3121,23 +3113,35 @@ function ContractManagement({
           )}
           {tab === "documents" && (
             <div className="contract-docs">
-              {selected.docs.map((d) => (
-                <article key={d.id}>
-                  <i className={d.status === "Đã đủ" ? "ok" : "missing"}>
-                    {d.status === "Đã đủ" ? "✓" : "!"}
-                  </i>
-                  <div>
-                    <b>{d.name}</b>
-                    <p>{d.note || "Không có ghi chú"}</p>
-                  </div>
-                  <span className={d.status === "Đã đủ" ? "ok" : "missing"}>
-                    {d.status}
-                  </span>
-                  <small>
-                    {d.status !== "Đã đủ" ? "Chưa hoàn thiện" : "Đã kiểm tra"}
-                  </small>
-                </article>
-              ))}
+              <div className="contract-doc-requirements">
+                {selected.docs.map((d) => (
+                  <article key={d.id}>
+                    <i className={d.status === "Đã đủ" ? "ok" : "missing"}>
+                      {d.status === "Đã đủ" ? "✓" : "!"}
+                    </i>
+                    <div>
+                      <b>{d.name}</b>
+                      <p>{d.note || "Không có ghi chú"}</p>
+                    </div>
+                    <span className={d.status === "Đã đủ" ? "ok" : "missing"}>
+                      {d.status}
+                    </span>
+                    <small>
+                      {d.status !== "Đã đủ" ? "Chưa hoàn thiện" : "Đã kiểm tra"}
+                    </small>
+                  </article>
+                ))}
+              </div>
+              {!readOnly && (
+                <DocumentManager
+                  title={`File hợp đồng HĐ-${selected.number}`}
+                  entityType="contract"
+                  entityId={String(selected.id)}
+                  workspaceId={workspaceId}
+                  readOnly={readOnly}
+                  onStatus={onStatus}
+                />
+              )}
             </div>
           )}
           {tab === "invoices" && (
@@ -3932,12 +3936,18 @@ function PODetail({
   setSuppliers,
   onUpdate,
   onBack,
+  workspaceId,
+  readOnly = false,
+  onStatus,
 }: {
   po: PO;
   suppliers: Supplier[];
   setSuppliers: React.Dispatch<React.SetStateAction<Supplier[]>>;
   onUpdate: (po: PO) => void;
   onBack: () => void;
+  workspaceId: string;
+  readOnly?: boolean;
+  onStatus?: (message: string) => void;
 }) {
   const supplier = suppliers.find((s) => s.id === po.supplierId)!;
   const total = po.items.reduce((s, i) => s + i.qty * i.price, 0);
@@ -4241,6 +4251,16 @@ function PODetail({
               </div>
             ))}
           </div>
+          {!readOnly && (
+            <DocumentManager
+              title={`File hồ sơ PO ${po.number}`}
+              entityType="po"
+              entityId={String(po.id)}
+              workspaceId={workspaceId}
+              readOnly={readOnly}
+              onStatus={onStatus}
+            />
+          )}
         </section>
         <section id="payments" className="po-section">
           <div className="section-heading">

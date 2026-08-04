@@ -10,7 +10,7 @@
   "d1_databases": [{
     "binding": "DB",
     "database_name": "mua-hang-db",
-    "database_id": "b9758dfb-ea50-4534-8372-7798ec7fb9e6",
+    "database_id": "THAY_DATABASE_ID_TAI_DAY",
     "migrations_dir": "drizzle"
   }],
   "r2_buckets": [{

@@ -19,8 +19,7 @@ export default function LoginForm() {
       });
     if (response.ok) location.reload();
     else {
-      const body = (await response.json().catch(() => ({}))) as {error?:string};
-      setError(body.error || "ID hoặc mật khẩu không đúng");
+      setError("ID hoặc mật khẩu không đúng");
       setBusy(false);
     }
   };
