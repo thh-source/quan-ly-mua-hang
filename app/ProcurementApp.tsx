@@ -3305,6 +3305,7 @@ function ApprovalSheet({
   const chosenSuppliers = draft.supplierIds
       .map((id) => suppliers.find((supplier) => supplier.id === id))
       .filter(Boolean) as Supplier[],
+    shownSuppliers = chosenSuppliers.slice(0, 4),
     totalSelected = draft.rows.reduce(
       (sum, row) => sum + row.qty * (row.prices[row.selectedSupplierId] || 0),
       0,
@@ -3357,15 +3358,13 @@ function ApprovalSheet({
             <label>Đơn vị lập biểu mẫu:<input value={draft.department} onChange={(e) => update({ department: e.target.value })}/></label>
             <label>Ghi chú: Căn cứ theo PR số:<input value={draft.prNumbers} onChange={(e) => update({ prNumbers: e.target.value })}/></label>
           </div>
-          <div className="approval-recipient" contentEditable suppressContentEditableWarning>
-            Kính gửi: BAN LÃNH ĐẠO CÔNG TY
-          </div>
+          <div className="approval-recipient" contentEditable suppressContentEditableWarning>Kính gửi: BAN LÃNH ĐẠO CÔNG TY</div>
           <textarea
             className="approval-intro"
             value={draft.intro}
             onChange={(e) => update({ intro: e.target.value })}
           />
-          <div className="approval-section-title">I. Tên hàng hóa</div>
+          <div className="approval-section-title">I&nbsp;&nbsp;&nbsp;&nbsp;Tên hàng hóa</div>
           <div className="approval-table-wrap">
             <table className="approval-table">
               <thead>
@@ -3374,7 +3373,7 @@ function ApprovalSheet({
                   <th rowSpan={2}>Hàng hóa</th>
                   <th rowSpan={2}>Số lượng</th>
                   <th rowSpan={2}>ĐVT</th>
-                  {chosenSuppliers.map((supplier) => (
+                  {shownSuppliers.map((supplier) => (
                     <th key={supplier.id} colSpan={2}>
                       NCC {draft.rows.some((row) => row.selectedSupplierId === supplier.id) ? "lựa chọn: " : ""}
                       {supplier.name}
@@ -3383,7 +3382,7 @@ function ApprovalSheet({
                   <th rowSpan={2}>Xóa</th>
                 </tr>
                 <tr>
-                  {chosenSuppliers.flatMap((supplier) => [
+                  {shownSuppliers.flatMap((supplier) => [
                     <th key={`${supplier.id}-price`}>Đơn giá (VNĐ)</th>,
                     <th key={`${supplier.id}-amount`}>Thành tiền</th>,
                   ])}
@@ -3396,7 +3395,7 @@ function ApprovalSheet({
                     <EditableCell>{row.name}</EditableCell>
                     <EditableCell className="center">{row.qty}</EditableCell>
                     <EditableCell className="center">{row.unit}</EditableCell>
-                    {chosenSuppliers.flatMap((supplier) => {
+                    {shownSuppliers.flatMap((supplier) => {
                       const selected = row.selectedSupplierId === supplier.id,
                         price = row.prices[supplier.id] || 0;
                       return [
@@ -3414,22 +3413,47 @@ function ApprovalSheet({
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={4}>Tổng giá trị đề xuất</td>
-                  <td colSpan={Math.max(1, chosenSuppliers.length * 2)} className="money">{fmt(totalSelected)} VNĐ</td>
+                  <td colSpan={4}>Tổng tiền cả chưa có VAT</td>
+                  {shownSuppliers.map((supplier) => {
+                    const sum = draft.rows.reduce(
+                      (n, row) => n + row.qty * (row.prices[supplier.id] || 0),
+                      0,
+                    );
+                    return (
+                      <td key={supplier.id} colSpan={2} className="money">{fmt(sum)}</td>
+                    );
+                  })}
                   <td></td>
+                </tr>
+                <tr>
+                  <td colSpan={4}>Thời gian cần hàng</td>
+                  <td colSpan={Math.max(1, shownSuppliers.length * 2)} contentEditable suppressContentEditableWarning></td>
+                  <td contentEditable suppressContentEditableWarning>Ngày: Tháng</td>
                 </tr>
               </tfoot>
             </table>
           </div>
           <button className="approval-add-row" onClick={addRow}>＋ Thêm dòng thủ công</button>
+          {chosenSuppliers.length > 4 && (
+            <p className="approval-overflow-note">
+              Mẫu A4 dọc đang hiển thị 4 NCC đầu tiên. Các NCC còn lại nên đưa vào phụ lục hoặc in trang so sánh riêng.
+            </p>
+          )}
           <div className="approval-note">
-            <b>II. Ghi chú / Đề xuất</b>
-            <textarea value={draft.note} onChange={(e) => update({ note: e.target.value })} placeholder="Nhập ghi chú lựa chọn NCC, lý do chọn, điều kiện thương mại..."/>
+            <b>II&nbsp;&nbsp;&nbsp;&nbsp;Đánh giá và đề xuất lựa chọn nhà cung cấp</b>
+            <p contentEditable suppressContentEditableWarning>1&nbsp;&nbsp;&nbsp;&nbsp;Nhà cung cấp đề xuất: {suppliers.find((supplier) => supplier.id === draft.rows[0]?.selectedSupplierId)?.name || ""}</p>
+            <p contentEditable suppressContentEditableWarning>2&nbsp;&nbsp;&nbsp;&nbsp;Điều khoản thanh toán: Thanh toán theo thỏa thuận sau khi nhận đủ hồ sơ thanh toán</p>
+            <b>III&nbsp;&nbsp;&nbsp;&nbsp;Lý do lựa chọn</b>
+            <p contentEditable suppressContentEditableWarning>1&nbsp;&nbsp;&nbsp;&nbsp;Hàng hóa đạt yêu cầu về chất lượng, thông số kỹ thuật.</p>
+            <p contentEditable suppressContentEditableWarning>2&nbsp;&nbsp;&nbsp;&nbsp;Đã thực hiện nhiều hợp đồng với công ty, đáp ứng quy định về thời gian giao hàng và chất lượng sản phẩm.</p>
+            <p contentEditable suppressContentEditableWarning>3&nbsp;&nbsp;&nbsp;&nbsp;Thời gian giao hàng đáp ứng tiến độ dự án/công việc.</p>
+            <textarea value={draft.note} onChange={(e) => update({ note: e.target.value })} placeholder="Ghi chú thêm nếu cần..."/>
           </div>
+          <p className="approval-thanks" contentEditable suppressContentEditableWarning>Xin trân trọng cảm ơn!</p>
           <div className="approval-sign">
-            <div><b>Người lập</b><span contentEditable suppressContentEditableWarning></span></div>
-            <div><b>Trưởng bộ phận</b><span contentEditable suppressContentEditableWarning></span></div>
-            <div><b>Ban lãnh đạo</b><span contentEditable suppressContentEditableWarning></span></div>
+            <div><b>Lãnh đạo phê duyệt</b><span contentEditable suppressContentEditableWarning>Đinh Anh Hào</span></div>
+            <div><b>Trưởng bộ phận</b><span contentEditable suppressContentEditableWarning>Lưu Thị Thanh Xuân</span></div>
+            <div><b>Người đề nghị</b><span contentEditable suppressContentEditableWarning>Trần Hà</span></div>
           </div>
         </div>
       </div>
