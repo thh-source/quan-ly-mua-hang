@@ -1,7 +1,5 @@
 "use client";
 
-import type { CSSProperties } from "react";
-
 export type VisualTimelineItem = {
   id: string | number;
   date: string;
@@ -31,32 +29,34 @@ export default function VisualTimeline({
     -1,
   );
   return (
-    <div
-      className="visual-timeline"
-      style={
-        {
-          "--progress": `${ordered.length > 1 ? Math.max(0, lastDone) / (ordered.length - 1) : 1}`,
-        } as CSSProperties
-      }
-    >
-      <div className="visual-timeline-line" />
-      {ordered.map((item, index) => {
-        const side = item.side || (index % 2 ? "bottom" : "top");
-        return (
-          <article
-            key={item.id}
-            className={`${side} ${item.status || "todo"}`}
-            style={{ left: `${ordered.length > 1 ? (index / (ordered.length - 1)) * 100 : 50}%` }}
-          >
-            <span>{dateVN(item.date)}</span>
-            <i />
-            <div>
-              <b>{item.title}</b>
-              {item.note && <p>{item.note}</p>}
-            </div>
-          </article>
-        );
-      })}
+    <div className="visual-timeline">
+      <div className="visual-timeline-track">
+        <div className="visual-timeline-base" />
+        <div
+          className="visual-timeline-line"
+          style={{
+            width:
+              ordered.length > 1
+                ? `${Math.max(0, lastDone) * 220}px`
+                : lastDone >= 0
+                  ? "1px"
+                  : "0",
+          }}
+        />
+        {ordered.map((item, index) => {
+          const side = item.side || (index % 2 ? "bottom" : "top");
+          return (
+            <article key={item.id} className={`${side} ${item.status || "todo"}`}>
+              <span>{dateVN(item.date)}</span>
+              <i />
+              <div>
+                <b>{item.title}</b>
+                {item.note && <p>{item.note}</p>}
+              </div>
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }
