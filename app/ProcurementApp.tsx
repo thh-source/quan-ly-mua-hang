@@ -9,6 +9,9 @@ import {
   useState,
 } from "react";
 import DocumentManager from "./DocumentManager";
+import ProjectContractManagement, {
+  type ProjectContractWorkspace,
+} from "./ProjectContractManagement";
 import SmartTableTools from "./SmartTableTools";
 
 function AutoGrowTextarea({
@@ -160,6 +163,7 @@ type View =
   | "po-list"
   | "po-detail"
   | "contracts"
+  | "project-contracts"
   | "products"
   | "trash"
   | "settings";
@@ -188,6 +192,7 @@ type StoredState = {
   poCart: POCartLine[];
   quotesByPr: Record<number, Quote>;
   quoteSupplierIdsByPr: Record<number, number[]>;
+  projectContracts: ProjectContractWorkspace;
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -330,6 +335,8 @@ export default function ProcurementApp({
     [currentPO, setCurrentPO] = useState<PO>(emptyPO);
   const [poCart, setPoCart] = useState<POCartLine[]>([]),
     [poCartOpen, setPoCartOpen] = useState(false);
+  const [projectContracts, setProjectContracts] =
+    useState<ProjectContractWorkspace>({ projects: [] });
   const [trash, setTrash] = useState<TrashItem[]>([]),
     [hiddenContractIds, setHiddenContractIds] = useState<number[]>([]),
     [deleteTarget, setDeleteTarget] = useState<{
@@ -394,6 +401,7 @@ export default function ProcurementApp({
         poCart,
         quotesByPr,
         quoteSupplierIdsByPr,
+        projectContracts,
       },
     });
   const persistState = useCallback(async (keepalive = false) => {
@@ -444,9 +452,10 @@ export default function ProcurementApp({
         poCart,
         quotesByPr,
         quoteSupplierIdsByPr,
+        projectContracts,
       },
     };
-  }, [hiddenContractIds, items, poCart, pos, products, prs, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
+  }, [hiddenContractIds, items, poCart, pos, products, projectContracts, prs, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -510,6 +519,7 @@ export default function ProcurementApp({
           );
           setHiddenContractIds(data.hiddenContractIds || []);
           setPoCart(data.poCart || []);
+          setProjectContracts(data.projectContracts || { projects: [] });
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
         } else {
@@ -525,6 +535,7 @@ export default function ProcurementApp({
           setTrash([]);
           setHiddenContractIds([]);
           setPoCart([]);
+          setProjectContracts({ projects: [] });
           setSelectedPR(emptyPR);
           setCurrentPO(emptyPO);
         }
@@ -555,6 +566,7 @@ export default function ProcurementApp({
     trash,
     hiddenContractIds,
     poCart,
+    projectContracts,
     workspaceId,
     persistState,
   ]);
@@ -607,6 +619,7 @@ export default function ProcurementApp({
           poCart,
           quotesByPr,
           quoteSupplierIdsByPr,
+          projectContracts,
         }),
       });
     } catch {}
@@ -1107,6 +1120,11 @@ export default function ProcurementApp({
     { icon: "⚖", name: "So sánh báo giá", action: () => setView("compare") },
     { icon: "▰", name: "Quản lý PO", action: () => setView("po-list") },
     { icon: "▧", name: "Hợp đồng", action: () => setView("contracts") },
+    {
+      icon: "▨",
+      name: "HĐ dự án",
+      action: () => setView("project-contracts"),
+    },
     { icon: "▱", name: "Nhà cung cấp", action: () => setView("suppliers") },
     { icon: "◇", name: "Hàng hóa", action: () => setView("products") },
     {
@@ -1157,6 +1175,7 @@ export default function ProcurementApp({
                 ((view === "po-list" || view === "po-detail") &&
                   n.name === "Quản lý PO") ||
                 (view === "contracts" && n.name === "Hợp đồng") ||
+                (view === "project-contracts" && n.name === "HĐ dự án") ||
                 (view === "products" && n.name === "Hàng hóa") ||
                 (view === "suppliers" && n.name === "Nhà cung cấp") ||
                 (view === "trash" && n.name.startsWith("Thùng rác")) ||
@@ -1198,8 +1217,10 @@ export default function ProcurementApp({
                     ? "So sánh báo giá"
                     : view.startsWith("po")
                       ? "Quản lý PO"
-                      : view === "contracts"
-                        ? "Hợp đồng"
+                    : view === "contracts"
+                      ? "Hợp đồng"
+                      : view === "project-contracts"
+                        ? "HĐ dự án"
                         : view === "products"
                           ? "Hàng hóa"
                           : view === "trash"
@@ -1322,6 +1343,12 @@ export default function ProcurementApp({
             workspaceId={workspaceId}
             readOnly={reportMode}
             onStatus={setStorageStatus}
+          />
+        )}
+        {view === "project-contracts" && !reportMode && (
+          <ProjectContractManagement
+            value={projectContracts}
+            onChange={setProjectContracts}
           />
         )}
         {view === "products" && (
