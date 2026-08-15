@@ -63,6 +63,16 @@
   color: #0f172a;
 }
 
+.history-reference {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 @media print {
   .vat-compare-toolbar {
     display: none !important;

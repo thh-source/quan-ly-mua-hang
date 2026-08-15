@@ -90,6 +90,27 @@ type Supplier = {
   contact: string;
   phone: string;
 };
+type PurchaseHistory = {
+  id: string;
+  warehouseCode: string;
+  warehouseName: string;
+  itemCode: string;
+  itemName: string;
+  accountingDate: string;
+  documentDate: string;
+  documentNo: string;
+  invoiceDate: string;
+  invoiceNo: string;
+  description: string;
+  unit: string;
+  unitPrice: number;
+  quantity: number;
+  value: number;
+  supplierCode: string;
+  supplierName: string;
+  supplierId: number;
+  department: string;
+};
 type QuoteMode = "before-vat" | "after-vat";
 type QuoteEntry = {
   price: string;
@@ -227,6 +248,8 @@ type StoredState = {
   quoteSupplierIdsByPr: Record<number, number[]>;
   projectContracts: ProjectContractWorkspace;
   quoteCompareMode?: QuoteMode;
+  purchaseHistory?: PurchaseHistory[];
+  purchaseHistoryImportIds?: string[];
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -282,8 +305,15 @@ const applyTools = (
 
 const items0: Item[] = [];
 const suppliers0: Supplier[] = [];
+const purchaseHistory0: PurchaseHistory[] = [];
 const quotes0: Quote = {};
 const prs0: PR[] = [];
+const HISTORY_SEED_ID = "purchase-history-t1-t7-2026";
+type PurchaseHistorySeed = {
+  suppliers: Supplier[];
+  products: Item[];
+  transactions: PurchaseHistory[];
+};
 const makeId = () => {
   const random = new Uint32Array(1);
   crypto.getRandomValues(random);
@@ -331,6 +361,54 @@ const quoteAfterVat = (entry?: Partial<QuoteEntry>) => {
 };
 const quoteComparePrice = (entry: Partial<QuoteEntry> | undefined, mode: QuoteMode) =>
   mode === "after-vat" ? quoteAfterVat(entry) : quoteBeforeVat(entry);
+const priceStats = (rows: PurchaseHistory[]) => {
+  const priced = rows.filter((row) => row.unitPrice > 0),
+    latest = [...priced].sort((a, b) =>
+      (b.documentDate || b.accountingDate).localeCompare(
+        a.documentDate || a.accountingDate,
+      ),
+    )[0],
+    min = priced.length ? Math.min(...priced.map((row) => row.unitPrice)) : 0,
+    max = priced.length ? Math.max(...priced.map((row) => row.unitPrice)) : 0,
+    totalValue = rows.reduce((sum, row) => sum + row.value, 0),
+    totalQty = rows.reduce((sum, row) => sum + row.quantity, 0);
+  return { latest, min, max, totalValue, totalQty, count: rows.length };
+};
+const mergeHistorySeed = (
+  currentSuppliers: Supplier[],
+  currentProducts: Item[],
+  currentHistory: PurchaseHistory[],
+  seed: PurchaseHistorySeed,
+) => {
+  const supplierByCode = new Map(currentSuppliers.map((supplier) => [supplier.code, supplier])),
+    productByCode = new Map(currentProducts.map((product) => [product.code, product])),
+    historyById = new Map(currentHistory.map((row) => [row.id, row]));
+  seed.suppliers.forEach((supplier) => {
+    const existing = supplierByCode.get(supplier.code);
+    supplierByCode.set(supplier.code, existing ? { ...supplier, ...existing } : supplier);
+  });
+  seed.products.forEach((product) => {
+    const existing = productByCode.get(product.code);
+    productByCode.set(
+      product.code,
+      existing
+        ? {
+            ...product,
+            ...existing,
+            estimate: existing.estimate || product.estimate,
+            unit: existing.unit || product.unit,
+            category: existing.category || product.category,
+          }
+        : product,
+    );
+  });
+  seed.transactions.forEach((row) => historyById.set(row.id, row));
+  return {
+    suppliers: [...supplierByCode.values()],
+    products: [...productByCode.values()],
+    history: [...historyById.values()],
+  };
+};
 const excelNumber = (
   value: string | number,
   label: string,
@@ -395,6 +473,11 @@ export default function ProcurementApp({
     [quotesByPr, setQuotesByPr] = useState<Record<number, Quote>>({}),
     [search, setSearch] = useState("");
   const [products, setProducts] = useState<Item[]>(items0);
+  const [purchaseHistory, setPurchaseHistory] =
+    useState<PurchaseHistory[]>(purchaseHistory0);
+  const [purchaseHistoryImportIds, setPurchaseHistoryImportIds] = useState<
+    string[]
+  >([]);
   const [quoteCompareMode, setQuoteCompareMode] =
     useState<QuoteMode>("before-vat");
   const [quoteSupplierIds, setQuoteSupplierIds] = useState<number[]>(
@@ -490,6 +573,8 @@ export default function ProcurementApp({
         quoteSupplierIdsByPr,
         projectContracts,
         quoteCompareMode,
+        purchaseHistory,
+        purchaseHistoryImportIds,
       },
     });
   const persistState = useCallback(async (keepalive = false) => {
@@ -542,9 +627,11 @@ export default function ProcurementApp({
         quoteSupplierIdsByPr,
         projectContracts,
         quoteCompareMode,
+        purchaseHistory,
+        purchaseHistoryImportIds,
       },
     };
-  }, [hiddenContractIds, items, poCart, pos, products, projectContracts, prs, quoteCompareMode, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
+  }, [hiddenContractIds, items, poCart, pos, products, projectContracts, prs, purchaseHistory, purchaseHistoryImportIds, quoteCompareMode, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -610,6 +697,8 @@ export default function ProcurementApp({
           setPoCart(data.poCart || []);
           setProjectContracts(data.projectContracts || { projects: [] });
           setQuoteCompareMode(data.quoteCompareMode || "before-vat");
+          setPurchaseHistory(data.purchaseHistory || purchaseHistory0);
+          setPurchaseHistoryImportIds(data.purchaseHistoryImportIds || []);
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
         } else {
@@ -627,6 +716,8 @@ export default function ProcurementApp({
           setPoCart([]);
           setProjectContracts({ projects: [] });
           setQuoteCompareMode("before-vat");
+          setPurchaseHistory(purchaseHistory0);
+          setPurchaseHistoryImportIds([]);
           setSelectedPR(emptyPR);
           setCurrentPO(emptyPO);
         }
@@ -658,9 +749,40 @@ export default function ProcurementApp({
     hiddenContractIds,
     poCart,
     projectContracts,
+    purchaseHistory,
+    purchaseHistoryImportIds,
     workspaceId,
     persistState,
   ]);
+  useEffect(() => {
+    if (
+      !storageReady ||
+      reportMode ||
+      purchaseHistoryImportIds.includes(HISTORY_SEED_ID)
+    )
+      return;
+    fetch("/purchase-history-t1-t7-2026.json")
+      .then((response) => {
+        if (!response.ok) throw new Error();
+        return response.json();
+      })
+      .then((seed: PurchaseHistorySeed) => {
+        const merged = mergeHistorySeed(
+          suppliers,
+          products,
+          purchaseHistory,
+          seed,
+        );
+        setSuppliers(merged.suppliers);
+        setProducts(merged.products);
+        setPurchaseHistory(merged.history);
+        setPurchaseHistoryImportIds((ids) => [...ids, HISTORY_SEED_ID]);
+        setStorageStatus(
+          `Đã nạp lịch sử mua hàng T1-T7/2026: ${seed.transactions.length} dòng`,
+        );
+      })
+      .catch(() => setStorageStatus("Không thể nạp dữ liệu lịch sử mua hàng"));
+  }, [products, purchaseHistory, purchaseHistoryImportIds, reportMode, storageReady, suppliers]);
   useEffect(() => {
     if (!storageReady || reportMode) return;
     const flush = () => void persistState(document.visibilityState === "hidden"),
@@ -711,6 +833,8 @@ export default function ProcurementApp({
           quotesByPr,
           quoteSupplierIdsByPr,
           projectContracts,
+          purchaseHistory,
+          purchaseHistoryImportIds,
         }),
       });
     } catch {}
@@ -1500,6 +1624,7 @@ export default function ProcurementApp({
             prs={prs}
             pos={pos}
             suppliers={suppliers}
+            purchaseHistory={purchaseHistory}
             onPR={() => setView("prs")}
             onPO={() => setView("po-list")}
             onCompare={() => setView("compare")}
@@ -1541,6 +1666,7 @@ export default function ProcurementApp({
             setProducts={setProducts}
             pos={pos}
             suppliers={suppliers}
+            purchaseHistory={purchaseHistory}
             onCreatePR={() => setView("create")}
           />
         )}
@@ -1575,6 +1701,7 @@ export default function ProcurementApp({
             suppliers={suppliers}
             setSuppliers={setSuppliers}
             onAdd={openSupplierModal}
+            purchaseHistory={purchaseHistory}
           />
         )}
         {view === "po-list" && (
@@ -1729,6 +1856,7 @@ export default function ProcurementApp({
               setQuoteCompareMode={setQuoteCompareMode}
               poSelections={poSelections}
               togglePOItem={togglePOItem}
+              purchaseHistory={purchaseHistory}
             />
             <small className="hint">
               Tích chọn một hoặc nhiều mặt hàng cùng nhà cung cấp để tạo PO. Nếu
@@ -2014,6 +2142,7 @@ function AdvancedItemsTable({
   setQuoteCompareMode,
   poSelections,
   togglePOItem,
+  purchaseHistory,
 }: {
   items: Item[];
   visibleItems: Item[];
@@ -2042,6 +2171,7 @@ function AdvancedItemsTable({
   setQuoteCompareMode: React.Dispatch<React.SetStateAction<QuoteMode>>;
   poSelections: number[];
   togglePOItem: (id: number) => void;
+  purchaseHistory: PurchaseHistory[];
 }) {
   const [dragged, setDragged] = useState<ColumnKey | null>(null);
   const filterValues = useMemo(
@@ -2238,7 +2368,9 @@ function AdvancedItemsTable({
         </thead>
         <tbody>
           {visibleItems.map((i, r) => {
-            const win = best(i.id);
+            const win = best(i.id),
+              historical = purchaseHistory.filter((row) => row.itemCode === i.code),
+              historicalStats = priceStats(historical);
             return (
               <tr
                 key={i.id}
@@ -2312,7 +2444,16 @@ function AdvancedItemsTable({
                     </td>,
                   ];
                 })}
-                <td className="best">{win ? fmt(win.price) + " ₫" : "—"}</td>
+                <td className="best">
+                  {win ? fmt(win.price) + " ₫" : "—"}
+                  {!!historicalStats.latest && (
+                    <small className="history-reference">
+                      LS gần nhất {fmt(historicalStats.latest.unitPrice)} ₫ ·
+                      min {fmt(historicalStats.min)} · max{" "}
+                      {fmt(historicalStats.max)}
+                    </small>
+                  )}
+                </td>
                 <td>
                   <span className={win ? "badge" : "empty"}>
                     {win?.supplier.name || "Chưa có giá"}
@@ -2579,12 +2720,14 @@ function ProductCatalog({
   setProducts,
   pos,
   suppliers,
+  purchaseHistory,
   onCreatePR,
 }: {
   products: Item[];
   setProducts: React.Dispatch<React.SetStateAction<Item[]>>;
   pos: PO[];
   suppliers: Supplier[];
+  purchaseHistory: PurchaseHistory[];
   onCreatePR: () => void;
 }) {
   const [query, setQuery] = useState(""),
@@ -2600,8 +2743,18 @@ function ProductCatalog({
         (p.code + p.name + p.spec).toLowerCase().includes(query.toLowerCase()),
     );
   const history = (product: Item) =>
-    pos
-      .flatMap((po) =>
+    [
+      ...purchaseHistory
+        .filter((row) => row.itemCode === product.code)
+        .map((row) => ({
+          date: row.documentDate || row.accountingDate,
+          po: row.documentNo || row.invoiceNo || "Nhập kho",
+          supplier: row.supplierName,
+          qty: row.quantity,
+          price: row.unitPrice,
+          source: "Nhập kho",
+        })),
+      ...pos.flatMap((po) =>
         po.items
           .filter((i) => i.code === product.code)
           .map((i) => ({
@@ -2611,9 +2764,10 @@ function ProductCatalog({
               suppliers.find((s) => s.id === po.supplierId)?.name || "—",
             qty: i.qty,
             price: i.price,
+            source: "PO",
           })),
-      )
-      .sort((a, b) => b.date.localeCompare(a.date));
+      ),
+    ].sort((a, b) => b.date.localeCompare(a.date));
   return (
     <section className="content product-page">
       <div className="heading">
@@ -2650,16 +2804,17 @@ function ProductCatalog({
           <b>
             {
               products.filter((p) =>
-                pos.some((po) => po.items.some((i) => i.code === p.code)),
+                pos.some((po) => po.items.some((i) => i.code === p.code)) ||
+                purchaseHistory.some((row) => row.itemCode === p.code),
               ).length
             }
           </b>
-          <small>Có dữ liệu PO</small>
+          <small>Có PO hoặc nhập kho</small>
         </article>
         <article>
           <span>Tổng lượt mua</span>
-          <b>{pos.reduce((n, p) => n + p.items.length, 0)}</b>
-          <small>Lịch sử theo PO</small>
+          <b>{pos.reduce((n, p) => n + p.items.length, 0) + purchaseHistory.length}</b>
+          <small>PO + nhập kho T1-T7</small>
         </article>
         <article>
           <span>Giá gần nhất</span>
@@ -2738,7 +2893,7 @@ function ProductCatalog({
                       <b>{latest?.po || "Chưa phát sinh"}</b>
                       <small>
                         {latest
-                          ? `${dateVN(latest.date)} · ${latest.supplier}`
+                          ? `${dateVN(latest.date)} · ${latest.supplier} · ${latest.source}`
                           : "Chưa có dữ liệu PO"}
                       </small>
                     </td>
@@ -2774,6 +2929,7 @@ function ProductCatalog({
                                 <th>Ngày mua</th>
                                 <th>Số PO</th>
                                 <th>Nhà cung cấp</th>
+                                <th>Nguồn</th>
                                 <th>Số lượng</th>
                                 <th>Đơn giá</th>
                                 <th>Thành tiền</th>
@@ -2782,7 +2938,7 @@ function ProductCatalog({
                             <tbody>
                               {!h.length && (
                                 <tr>
-                                  <td colSpan={6}>Chưa có lịch sử mua hàng.</td>
+                                  <td colSpan={7}>Chưa có lịch sử mua hàng.</td>
                                 </tr>
                               )}
                               {h.map((x, i) => (
@@ -2792,6 +2948,7 @@ function ProductCatalog({
                                     <b>{x.po}</b>
                                   </td>
                                   <td>{x.supplier}</td>
+                                  <td>{x.source}</td>
                                   <td>
                                     {x.qty} {p.unit}
                                   </td>
@@ -3629,6 +3786,7 @@ function Dashboard({
   prs,
   pos,
   suppliers,
+  purchaseHistory,
   onPR,
   onPO,
   onCompare,
@@ -3636,6 +3794,7 @@ function Dashboard({
   prs: PR[];
   pos: PO[];
   suppliers: Supplier[];
+  purchaseHistory: PurchaseHistory[];
   onPR: () => void;
   onPO: () => void;
   onCompare: () => void;
@@ -3660,6 +3819,18 @@ function Dashboard({
       prs.filter((p) => p.status !== "Hoàn thành").length +
       pos.filter((p) => p.status !== "Hoàn thành").length,
     attention = missingDocs + pendingPayments,
+    historyValue = purchaseHistory.reduce((n, row) => n + row.value, 0),
+    historyItems = new Set(purchaseHistory.map((row) => row.itemCode)).size,
+    historySuppliers = new Set(purchaseHistory.map((row) => row.supplierCode))
+      .size,
+    topHistorySuppliers = [...purchaseHistory
+      .reduce((map, row) => {
+        const current = map.get(row.supplierName) || 0;
+        map.set(row.supplierName, current + row.value);
+        return map;
+      }, new Map<string, number>())]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5),
     progressTotal = completed + doing + attention,
     progressPercent = progressTotal
       ? Math.round((completed / progressTotal) * 100)
@@ -3740,8 +3911,37 @@ function Dashboard({
             <small>{pendingPayments} đợt chờ thanh toán</small>
           </span>
         </button>
+        <button onClick={onCompare}>
+          <i className="green">◎</i>
+          <span>
+            Lịch sử nhập kho<strong>{fmt(historyValue)} ₫</strong>
+            <small>
+              {purchaseHistory.length} dòng · {historyItems} mã ·{" "}
+              {historySuppliers} NCC
+            </small>
+          </span>
+        </button>
       </div>
       <div className="dashboard-grid">
+        {!!topHistorySuppliers.length && (
+          <section className="dashboard-panel">
+            <div className="panel-title">
+              <div>
+                <h2>Top NCC theo lịch sử mua</h2>
+                <p>Dữ liệu nhập kho T1-T7/2026 dùng để tham chiếu giá</p>
+              </div>
+              <span>{historySuppliers} NCC</span>
+            </div>
+            <div className="compact-history-list">
+              {topHistorySuppliers.map(([name, value]) => (
+                <article key={name}>
+                  <b>{name}</b>
+                  <span>{fmt(value)} ₫</span>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
         <section className="dashboard-panel priority-panel">
           <div className="panel-title">
             <div>
@@ -4262,15 +4462,45 @@ function SupplierManagement({
   suppliers,
   setSuppliers,
   onAdd,
+  purchaseHistory,
 }: {
   suppliers: Supplier[];
   setSuppliers: React.Dispatch<React.SetStateAction<Supplier[]>>;
   onAdd: () => void;
+  purchaseHistory: PurchaseHistory[];
 }) {
   const update = (id: number, key: keyof Supplier, value: string) =>
     setSuppliers((list) =>
       list.map((s) => (s.id === id ? { ...s, [key]: value } : s)),
     );
+  const supplierStats = (supplier: Supplier) => {
+    const rows = purchaseHistory.filter(
+        (row) =>
+          row.supplierCode === supplier.code || row.supplierName === supplier.name,
+      ),
+      stats = priceStats(rows),
+      topItems = [...rows
+        .reduce((map, row) => {
+          const current = map.get(row.itemCode) || {
+            code: row.itemCode,
+            name: row.itemName,
+            value: 0,
+            count: 0,
+          };
+          current.value += row.value;
+          current.count += 1;
+          map.set(row.itemCode, current);
+          return map;
+        }, new Map<string, { code: string; name: string; value: number; count: number }>())]
+        .map(([, value]) => value)
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 3);
+    return {
+      ...stats,
+      itemCount: new Set(rows.map((row) => row.itemCode)).size,
+      topItems,
+    };
+  };
   return (
     <section className="content supplier-page">
       <div className="heading">
@@ -4295,15 +4525,43 @@ function SupplierManagement({
         <span>
           <b>{suppliers.filter((s) => s.contact).length}</b> đã có người liên hệ
         </span>
+        <span>
+          <b>{purchaseHistory.length}</b> dòng lịch sử nhập kho
+        </span>
       </div>
       <div className="supplier-grid">
-        {suppliers.map((s) => (
+        {suppliers.map((s) => {
+          const stats = supplierStats(s);
+          return (
           <article key={s.id} className="supplier-card">
             <div className="supplier-card-head">
               <span>{s.code}</span>
               <strong>{s.name}</strong>
               <i>Đang hoạt động</i>
             </div>
+            <div className="supplier-history-kpis">
+              <span>
+                <b>{fmt(stats.totalValue)} ₫</b>
+                <small>Giá trị T1-T7</small>
+              </span>
+              <span>
+                <b>{stats.count}</b>
+                <small>Lượt mua</small>
+              </span>
+              <span>
+                <b>{stats.itemCount}</b>
+                <small>Mã hàng</small>
+              </span>
+            </div>
+            {!!stats.topItems.length && (
+              <div className="supplier-top-items">
+                {stats.topItems.map((item) => (
+                  <small key={item.code}>
+                    {item.code} · {item.name} · {fmt(item.value)} ₫
+                  </small>
+                ))}
+              </div>
+            )}
             <div className="supplier-fields">
               <label>
                 Mã nhà cung cấp
@@ -4356,7 +4614,8 @@ function SupplierManagement({
               </label>
             </div>
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

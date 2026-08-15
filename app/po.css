@@ -8,3 +8,4 @@
 .supplier-modal-grid label b{color:#d73737}
 .supplier-modal-grid .full{grid-column:1/-1}
 @media(max-width:650px){.supplier-modal-grid{grid-template-columns:1fr}.supplier-modal-grid .full{grid-column:auto}}
+.supplier-history-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 16px 0}.supplier-history-kpis span{border:1px solid #e1eaf3;border-radius:7px;background:#fbfdff;padding:8px}.supplier-history-kpis b,.supplier-history-kpis small{display:block}.supplier-history-kpis b{font-size:12px;color:var(--blue)}.supplier-history-kpis small{font-size:9px;color:var(--muted);margin-top:3px}.supplier-top-items{display:grid;gap:5px;padding:10px 16px 0}.supplier-top-items small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#53677e;background:#f6f9fc;border-radius:5px;padding:6px 8px}@media(max-width:700px){.supplier-history-kpis{grid-template-columns:1fr}}
