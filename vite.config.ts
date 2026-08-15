@@ -1,10 +1,17 @@
 import vinext from "vinext";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { defineConfig } from "vite";
-import hostingConfig from "./.openai/hosting.json";
-import { sites } from "./build/sites-vite-plugin";
 
 const SITE_CREATOR_PLACEHOLDER_DATABASE_ID =
   "00000000-0000-4000-8000-000000000000";
+const rootDir = dirname(fileURLToPath(import.meta.url));
+const hostingConfigPath = resolve(rootDir, ".openai/hosting.json");
+const sitesPluginPath = resolve(rootDir, "build/sites-vite-plugin.ts");
+const hostingConfig = existsSync(hostingConfigPath)
+  ? JSON.parse(readFileSync(hostingConfigPath, "utf8"))
+  : {};
 
 const { d1, r2 } = hostingConfig;
 
@@ -40,8 +47,22 @@ export default defineConfig(async () => {
   process.env.WRANGLER_LOG_PATH ??= ".wrangler/logs";
   process.env.MINIFLARE_REGISTRY_PATH ??= ".wrangler/registry";
 
-  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
-  const { cloudflare } = await import("@cloudflare/vite-plugin");
+  const plugins = [vinext()];
+
+  if (existsSync(sitesPluginPath)) {
+    const { sites } = await import(pathToFileURL(sitesPluginPath).href);
+    plugins.push(sites());
+
+    // Wrangler snapshots its log path while the Cloudflare plugin is imported.
+    const { cloudflare } = await import("@cloudflare/vite-plugin");
+    plugins.push(
+      cloudflare({
+        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+        inspectorPort: false,
+        config: localBindingConfig,
+      }),
+    );
+  }
 
   return {
     server: {
@@ -54,14 +75,6 @@ export default defineConfig(async () => {
     build: {
       rolldownOptions: { external: ["cloudflare:workers"] },
     },
-    plugins: [
-      vinext(),
-      sites(),
-      cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        inspectorPort: false,
-        config: localBindingConfig,
-      }),
-    ],
+    plugins,
   };
 });
