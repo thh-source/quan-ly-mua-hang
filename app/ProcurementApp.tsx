@@ -15,6 +15,7 @@ import ProjectContractManagement, {
 } from "./ProjectContractManagement";
 import SmartTableTools from "./SmartTableTools";
 import VisualTimeline from "./VisualTimeline";
+import "./vat-quote.css";
 
 function AutoGrowTextarea({
   value,
@@ -89,7 +90,14 @@ type Supplier = {
   contact: string;
   phone: string;
 };
-type Quote = Record<number, Record<number, { price: string; note: string }>>;
+type QuoteMode = "before-vat" | "after-vat";
+type QuoteEntry = {
+  price: string;
+  note: string;
+  priceMode?: QuoteMode;
+  vatRate?: string;
+};
+type Quote = Record<number, Record<number, QuoteEntry>>;
 type PR = {
   id: number;
   number: string;
@@ -118,6 +126,7 @@ type POCartLine = {
   item: Item;
   supplierId: number;
   price: number;
+  priceBeforeVat?: number;
   allocation: POAllocation;
 };
 type ApprovalRow = {
@@ -217,6 +226,7 @@ type StoredState = {
   quotesByPr: Record<number, Quote>;
   quoteSupplierIdsByPr: Record<number, number[]>;
   projectContracts: ProjectContractWorkspace;
+  quoteCompareMode?: QuoteMode;
 };
 const BASE_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "stt", label: "STT" },
@@ -288,6 +298,34 @@ const emptyItem = (index: number): Item => ({
 const fmt = (n: number) => new Intl.NumberFormat("vi-VN").format(n || 0);
 const dateVN = (s: string) =>
   s ? new Intl.DateTimeFormat("vi-VN").format(new Date(s)) : "—";
+const DEFAULT_VAT_RATE = 10;
+const quoteDefaults = (entry?: Partial<QuoteEntry>): QuoteEntry => ({
+  price: entry?.price || "",
+  note: entry?.note || "",
+  priceMode: entry?.priceMode || "before-vat",
+  vatRate: entry?.vatRate || String(DEFAULT_VAT_RATE),
+});
+const quoteAmount = (entry?: Partial<QuoteEntry>) => Number(entry?.price) || 0;
+const quoteVatRate = (entry?: Partial<QuoteEntry>) => {
+  const rate = Number(entry?.vatRate ?? DEFAULT_VAT_RATE);
+  return Number.isFinite(rate) && rate >= 0 ? rate : DEFAULT_VAT_RATE;
+};
+const quoteBeforeVat = (entry?: Partial<QuoteEntry>) => {
+  const amount = quoteAmount(entry);
+  if (!amount) return 0;
+  return (entry?.priceMode || "before-vat") === "after-vat"
+    ? amount / (1 + quoteVatRate(entry) / 100)
+    : amount;
+};
+const quoteAfterVat = (entry?: Partial<QuoteEntry>) => {
+  const amount = quoteAmount(entry);
+  if (!amount) return 0;
+  return (entry?.priceMode || "before-vat") === "after-vat"
+    ? amount
+    : amount * (1 + quoteVatRate(entry) / 100);
+};
+const quoteComparePrice = (entry: Partial<QuoteEntry> | undefined, mode: QuoteMode) =>
+  mode === "after-vat" ? quoteAfterVat(entry) : quoteBeforeVat(entry);
 const pos0: PO[] = [];
 const emptyPR: PR = {
   id: 0,
@@ -335,6 +373,8 @@ export default function ProcurementApp({
     [quotesByPr, setQuotesByPr] = useState<Record<number, Quote>>({}),
     [search, setSearch] = useState("");
   const [products, setProducts] = useState<Item[]>(items0);
+  const [quoteCompareMode, setQuoteCompareMode] =
+    useState<QuoteMode>("before-vat");
   const [quoteSupplierIds, setQuoteSupplierIds] = useState<number[]>(
       suppliers0.map((s) => s.id),
     ),
@@ -427,6 +467,7 @@ export default function ProcurementApp({
         quotesByPr,
         quoteSupplierIdsByPr,
         projectContracts,
+        quoteCompareMode,
       },
     });
   const persistState = useCallback(async (keepalive = false) => {
@@ -478,9 +519,10 @@ export default function ProcurementApp({
         quotesByPr,
         quoteSupplierIdsByPr,
         projectContracts,
+        quoteCompareMode,
       },
     };
-  }, [hiddenContractIds, items, poCart, pos, products, projectContracts, prs, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
+  }, [hiddenContractIds, items, poCart, pos, products, projectContracts, prs, quoteCompareMode, quoteSupplierIds, quoteSupplierIdsByPr, quotes, quotesByPr, suppliers, trash, workspaceId]);
   useEffect(() => {
     if (
       reportMode ||
@@ -545,6 +587,7 @@ export default function ProcurementApp({
           setHiddenContractIds(data.hiddenContractIds || []);
           setPoCart(data.poCart || []);
           setProjectContracts(data.projectContracts || { projects: [] });
+          setQuoteCompareMode(data.quoteCompareMode || "before-vat");
           if (data.prs?.length) setSelectedPR(data.prs[0]);
           if (data.pos?.length) setCurrentPO(data.pos[0]);
         } else {
@@ -561,6 +604,7 @@ export default function ProcurementApp({
           setHiddenContractIds([]);
           setPoCart([]);
           setProjectContracts({ projects: [] });
+          setQuoteCompareMode("before-vat");
           setSelectedPR(emptyPR);
           setCurrentPO(emptyPO);
         }
@@ -759,13 +803,14 @@ export default function ProcurementApp({
       );
       items.forEach((item) => {
         selectedSuppliers.forEach((supplier) => {
-          const price = Number(quotes[item.id]?.[supplier.id]?.price);
+          const entry = quotes[item.id]?.[supplier.id];
+          const price = quoteComparePrice(entry, quoteCompareMode);
           if (price > 0 && (!result.has(item.id) || price < result.get(item.id)!.price))
             result.set(item.id, { supplier, price });
         });
       });
       return result;
-    }, [items, quoteSupplierIds, quotes, suppliers]);
+    }, [items, quoteCompareMode, quoteSupplierIds, quotes, suppliers]);
   const best = (itemId: number) => bestByItem.get(itemId) || null;
   const itemChange = (
     id: number,
@@ -788,7 +833,7 @@ export default function ProcurementApp({
   const quoteChange = (
     iid: number,
     sid: number,
-    k: "price" | "note",
+    k: keyof QuoteEntry,
     v: string,
   ) => {
     const next = {
@@ -796,8 +841,7 @@ export default function ProcurementApp({
         [iid]: {
           ...quotes[iid],
           [sid]: {
-            price: quotes[iid]?.[sid]?.price || "",
-            note: quotes[iid]?.[sid]?.note || "",
+            ...quoteDefaults(quotes[iid]?.[sid]),
             [k]: v,
           },
         },
@@ -1006,7 +1050,8 @@ export default function ProcurementApp({
         id: `${selectedPR.id}:${item.id}`,
         item: { ...item },
         supplierId: winner.supplier.id,
-        price: winner.price,
+        price: quoteAfterVat(quotes[item.id]?.[winner.supplier.id]),
+        priceBeforeVat: quoteBeforeVat(quotes[item.id]?.[winner.supplier.id]),
         allocation: {
           prId: selectedPR.id,
           prNumber: selectedPR.number,
@@ -1023,7 +1068,7 @@ export default function ProcurementApp({
       supplierIds = [
         ...new Set([
           ...quoteSupplierIds.filter((id) =>
-            poCart.some((line) => Number(quotes[line.item.id]?.[id]?.price) > 0),
+            poCart.some((line) => quoteBeforeVat(quotes[line.item.id]?.[id]) > 0),
           ),
           poCart[0].supplierId,
         ]),
@@ -1031,7 +1076,7 @@ export default function ProcurementApp({
       rows: ApprovalRow[] = poCart.map((line) => {
         const prices: Record<number, number> = {};
         supplierIds.forEach((supplierId) => {
-          prices[supplierId] = Number(quotes[line.item.id]?.[supplierId]?.price || 0);
+          prices[supplierId] = quoteBeforeVat(quotes[line.item.id]?.[supplierId]);
         });
         return {
           id: line.id,
@@ -1621,6 +1666,8 @@ export default function ProcurementApp({
               itemChange={itemChange}
               quoteChange={quoteChange}
               best={best}
+              quoteCompareMode={quoteCompareMode}
+              setQuoteCompareMode={setQuoteCompareMode}
               poSelections={poSelections}
               togglePOItem={togglePOItem}
             />
@@ -1904,6 +1951,8 @@ function AdvancedItemsTable({
   itemChange,
   quoteChange,
   best,
+  quoteCompareMode,
+  setQuoteCompareMode,
   poSelections,
   togglePOItem,
 }: {
@@ -1926,10 +1975,12 @@ function AdvancedItemsTable({
   quoteChange: (
     iid: number,
     sid: number,
-    k: "price" | "note",
+    k: keyof QuoteEntry,
     v: string,
   ) => void;
   best: (id: number) => { supplier: Supplier; price: number } | null;
+  quoteCompareMode: QuoteMode;
+  setQuoteCompareMode: React.Dispatch<React.SetStateAction<QuoteMode>>;
   poSelections: number[];
   togglePOItem: (id: number) => void;
 }) {
@@ -2001,7 +2052,23 @@ function AdvancedItemsTable({
     );
   };
   return (
-    <div className="tablewrap advanced-table">
+    <>
+      <div className="vat-compare-toolbar">
+        <span>So sánh giá theo:</span>
+        <button
+          className={quoteCompareMode === "before-vat" ? "active" : ""}
+          onClick={() => setQuoteCompareMode("before-vat")}
+        >
+          Giá chưa VAT
+        </button>
+        <button
+          className={quoteCompareMode === "after-vat" ? "active" : ""}
+          onClick={() => setQuoteCompareMode("after-vat")}
+        >
+          Giá có VAT
+        </button>
+      </div>
+      <div className="tablewrap advanced-table vat-quote-table">
       <table>
         <thead>
           <tr>
@@ -2084,7 +2151,7 @@ function AdvancedItemsTable({
               );
             })}
             {suppliers.map((s) => (
-              <th colSpan={2} className="suphead" key={s.id}>
+              <th colSpan={4} className="suphead" key={s.id}>
                 {s.name}
                 <button
                   onClick={() =>
@@ -2101,7 +2168,9 @@ function AdvancedItemsTable({
           </tr>
           <tr>
             {suppliers.flatMap((s) => [
-              <th key={s.id + "p"}>Giá</th>,
+              <th key={s.id + "p"}>Giá NCC</th>,
+              <th key={s.id + "v"}>Loại/VAT</th>,
+              <th key={s.id + "c"}>Quy đổi</th>,
               <th key={s.id + "n"}>Ghi chú</th>,
             ])}
             <th>Giá tốt nhất</th>
@@ -2126,8 +2195,10 @@ function AdvancedItemsTable({
                 </td>
                 {order.map((key) => cell(i, key, r))}
                 {suppliers.flatMap((s) => {
-                  const q = quotes[i.id]?.[s.id] || { price: "", note: "" },
-                    low = win?.supplier.id === s.id;
+                  const q = quoteDefaults(quotes[i.id]?.[s.id]),
+                    low = win?.supplier.id === s.id,
+                    beforeVat = quoteBeforeVat(q),
+                    afterVat = quoteAfterVat(q);
                   return [
                     <td className={low ? "low" : ""} key={s.id + "p"}>
                       <div className="qprice">
@@ -2142,6 +2213,34 @@ function AdvancedItemsTable({
                           }
                         />
                       </div>
+                    </td>,
+                    <td className="vat-mode-cell" key={s.id + "v"}>
+                      <select
+                        value={q.priceMode}
+                        onChange={(e) =>
+                          quoteChange(i.id, s.id, "priceMode", e.target.value)
+                        }
+                      >
+                        <option value="before-vat">Chưa VAT</option>
+                        <option value="after-vat">Đã VAT</option>
+                      </select>
+                      <label>
+                        VAT
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.5"
+                          value={q.vatRate}
+                          onChange={(e) =>
+                            quoteChange(i.id, s.id, "vatRate", e.target.value)
+                          }
+                        />
+                        %
+                      </label>
+                    </td>,
+                    <td className="vat-converted-cell" key={s.id + "c"}>
+                      <span>Chưa VAT: <b>{beforeVat ? fmt(beforeVat) : "—"}</b></span>
+                      <span>Có VAT: <b>{afterVat ? fmt(afterVat) : "—"}</b></span>
                     </td>,
                     <td key={s.id + "n"}>
                       <AutoGrowTextarea
@@ -2175,13 +2274,22 @@ function AdvancedItemsTable({
               <td className="money" key={s.id + "t"}>
                 {fmt(
                   visibleItems.reduce(
-                    (a, i) =>
-                      a + (Number(quotes[i.id]?.[s.id]?.price) || 0) * i.qty,
+                    (a, i) => a + quoteBeforeVat(quotes[i.id]?.[s.id]) * i.qty,
                     0,
                   ),
                 )}{" "}
                 ₫
               </td>,
+              <td className="money" key={s.id + "ta"}>
+                {fmt(
+                  visibleItems.reduce(
+                    (a, i) => a + quoteAfterVat(quotes[i.id]?.[s.id]) * i.qty,
+                    0,
+                  ),
+                )}{" "}
+                ₫
+              </td>,
+              <td key={s.id + "tc"}>Chưa VAT / Có VAT</td>,
               <td key={s.id + "x"}></td>,
             ])}
             <td colSpan={2}></td>
@@ -2189,6 +2297,7 @@ function AdvancedItemsTable({
         </tfoot>
       </table>
     </div>
+    </>
   );
 }
 
