@@ -284,8 +284,13 @@ const items0: Item[] = [];
 const suppliers0: Supplier[] = [];
 const quotes0: Quote = {};
 const prs0: PR[] = [];
+const makeId = () => {
+  const random = new Uint32Array(1);
+  crypto.getRandomValues(random);
+  return (Date.now() % 1_000_000_000) * 1_000_000 + (random[0] % 1_000_000);
+};
 const emptyItem = (index: number): Item => ({
-  id: Date.now() + index,
+  id: makeId(),
   code: `VT-${String(index + 1).padStart(3, "0")}`,
   category: "",
   name: "",
@@ -326,6 +331,23 @@ const quoteAfterVat = (entry?: Partial<QuoteEntry>) => {
 };
 const quoteComparePrice = (entry: Partial<QuoteEntry> | undefined, mode: QuoteMode) =>
   mode === "after-vat" ? quoteAfterVat(entry) : quoteBeforeVat(entry);
+const excelNumber = (
+  value: string | number,
+  label: string,
+  rowNumber: number,
+  required = false,
+) => {
+  const raw = String(value ?? "").trim().replace(/\s/g, "").replace(",", ".");
+  if (!raw) {
+    if (required) throw new Error(`Dòng ${rowNumber}: thiếu ${label}`);
+    return 0;
+  }
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed))
+    throw new Error(`Dòng ${rowNumber}: ${label} không phải là số`);
+  if (parsed < 0) throw new Error(`Dòng ${rowNumber}: ${label} không được âm`);
+  return parsed;
+};
 const pos0: PO[] = [];
 const emptyPR: PR = {
   id: 0,
@@ -836,19 +858,33 @@ export default function ProcurementApp({
     k: keyof QuoteEntry,
     v: string,
   ) => {
+    const updatedEntry = {
+      ...quoteDefaults(quotes[iid]?.[sid]),
+      [k]: v,
+    };
     const next = {
         ...quotes,
         [iid]: {
           ...quotes[iid],
-          [sid]: {
-            ...quoteDefaults(quotes[iid]?.[sid]),
-            [k]: v,
-          },
+          [sid]: updatedEntry,
         },
       };
     setQuotes(next);
     if (selectedPR.id)
       setQuotesByPr((all) => ({ ...all, [selectedPR.id]: next }));
+    setPoCart((cart) =>
+      cart.map((line) =>
+        line.allocation.prId === selectedPR.id &&
+        line.allocation.prItemId === iid &&
+        line.supplierId === sid
+          ? {
+              ...line,
+              price: quoteAfterVat(updatedEntry),
+              priceBeforeVat: quoteBeforeVat(updatedEntry),
+            }
+          : line,
+      ),
+    );
   };
   const openCompare = (pr: PR) => {
     setSelectedPR(pr);
@@ -879,7 +915,7 @@ export default function ProcurementApp({
       return;
     const valid = draft.items.filter((i) => i.code.trim() || i.name.trim());
     const pr: PR = {
-      id: Date.now(),
+      id: makeId(),
       number: draft.number.trim(),
       date: draft.date,
       department: draft.department.trim(),
@@ -893,7 +929,7 @@ export default function ProcurementApp({
       ...current,
       ...valid
         .filter((i) => !current.some((p) => p.code === i.code))
-        .map((i) => ({ ...i, id: Date.now() + i.id })),
+        .map((i) => ({ ...i, id: makeId() })),
     ]);
     setDraft({
       number: `PR-${new Date().getFullYear()}-${String(prs.length + 1).padStart(4, "0")}`,
@@ -925,18 +961,26 @@ export default function ProcurementApp({
         if (header < 0) throw new Error("Không tìm thấy cột Mã hàng");
         const imported = rows
           .slice(header + 1)
-          .filter((r) => String(r[1] || r[0] || "").trim())
-          .map((r, i) => ({
-            id: Date.now() + i,
-            code: String(r[1] ?? ""),
-            category: String(r[2] ?? ""),
-            name: String(r[3] ?? ""),
-            desc: String(r[4] ?? ""),
-            spec: String(r[5] ?? ""),
-            unit: String(r[6] ?? ""),
-            qty: Number(r[7]) || 0,
-            estimate: Number(r[8]) || 0,
-          }));
+          .map((r, i) => ({ row: r, rowNumber: header + i + 2 }))
+          .filter(({ row }) => String(row[1] || row[0] || "").trim())
+          .map(({ row, rowNumber }) => {
+            const qty = excelNumber(row[7], "Số lượng", rowNumber, true),
+              estimate = excelNumber(row[8], "Đơn giá dự kiến", rowNumber);
+            if (!String(row[1] ?? "").trim() && !String(row[3] ?? "").trim())
+              throw new Error(`Dòng ${rowNumber}: thiếu mã hàng hoặc tên hàng`);
+            if (qty <= 0) throw new Error(`Dòng ${rowNumber}: số lượng phải lớn hơn 0`);
+            return {
+              id: makeId(),
+              code: String(row[1] ?? "").trim(),
+              category: String(row[2] ?? "").trim(),
+              name: String(row[3] ?? "").trim(),
+              desc: String(row[4] ?? "").trim(),
+              spec: String(row[5] ?? "").trim(),
+              unit: String(row[6] ?? "").trim() || "Cái",
+              qty,
+              estimate,
+            };
+          });
         if (!imported.length) throw new Error("File chưa có dữ liệu");
         setDraft((d) => ({ ...d, items: imported }));
         setImportMessage(`Đã nhập ${imported.length} mặt hàng từ ${file.name}`);
@@ -968,7 +1012,7 @@ export default function ProcurementApp({
     setSuppliers((s) => [
       ...s,
       {
-        id: Date.now(),
+        id: makeId(),
         ...newSupplier,
         code: newSupplier.code.trim(),
         name: newSupplier.name.trim(),
@@ -1066,17 +1110,32 @@ export default function ProcurementApp({
     if (!poCart.length) return;
     const sourcePRs = [...new Set(poCart.map((line) => line.allocation.prNumber))],
       supplierIds = [
-        ...new Set([
-          ...quoteSupplierIds.filter((id) =>
-            poCart.some((line) => quoteBeforeVat(quotes[line.item.id]?.[id]) > 0),
-          ),
-          poCart[0].supplierId,
-        ]),
+        ...new Set(
+          poCart.flatMap((line) => {
+            const prQuotes =
+                quotesByPr[line.allocation.prId] ||
+                (line.allocation.prId === selectedPR.id ? quotes : {}),
+              prSupplierIds =
+                quoteSupplierIdsByPr[line.allocation.prId] ||
+                (line.allocation.prId === selectedPR.id ? quoteSupplierIds : []);
+            return [
+              ...prSupplierIds.filter(
+                (id) => quoteBeforeVat(prQuotes[line.item.id]?.[id]) > 0,
+              ),
+              line.supplierId,
+            ];
+          }),
+        ),
       ],
       rows: ApprovalRow[] = poCart.map((line) => {
-        const prices: Record<number, number> = {};
+        const prices: Record<number, number> = {},
+          prQuotes =
+            quotesByPr[line.allocation.prId] ||
+            (line.allocation.prId === selectedPR.id ? quotes : {});
         supplierIds.forEach((supplierId) => {
-          prices[supplierId] = quoteBeforeVat(quotes[line.item.id]?.[supplierId]);
+          prices[supplierId] = quoteBeforeVat(
+            prQuotes[line.item.id]?.[supplierId],
+          );
         });
         return {
           id: line.id,
@@ -1108,7 +1167,7 @@ export default function ProcurementApp({
     const supplier = suppliers.find((s) => s.id === poCart[0].supplierId);
     if (!supplier) return;
     const grouped = new Map<string, POItem>();
-    poCart.forEach((line, index) => {
+    poCart.forEach((line) => {
       const key = `${line.item.code}|${line.item.spec}|${line.item.unit}|${line.price}`,
         existing = grouped.get(key);
       if (existing) {
@@ -1120,7 +1179,7 @@ export default function ProcurementApp({
       } else {
         grouped.set(key, {
           ...line.item,
-          id: Date.now() + index,
+          id: makeId(),
           qty: line.allocation.qty,
           price: line.price,
           allocations: [line.allocation],
@@ -1132,7 +1191,7 @@ export default function ProcurementApp({
     });
     const sourcePRs = [...new Set(poCart.map((line) => line.allocation.prNumber))];
     const po: PO = {
-      id: Date.now(),
+      id: makeId(),
       number: `PO-${new Date().getFullYear()}-${String(pos.length + 1).padStart(4, "0")}`,
       prNumber:
         sourcePRs.length === 1 ? sourcePRs[0] : `Nhiều PR (${sourcePRs.length})`,
@@ -1143,19 +1202,19 @@ export default function ProcurementApp({
       items: [...grouped.values()],
       docs: [
         {
-          id: Date.now(),
+          id: makeId(),
           name: "Hợp đồng / PO xác nhận",
           status: "Chờ bổ sung",
           note: "",
         },
         {
-          id: Date.now() + 1,
+          id: makeId(),
           name: "Hóa đơn VAT",
           status: "Còn thiếu",
           note: "",
         },
         {
-          id: Date.now() + 2,
+          id: makeId(),
           name: "Biên bản giao nhận",
           status: "Còn thiếu",
           note: "",
@@ -1163,7 +1222,7 @@ export default function ProcurementApp({
       ],
       payments: [
         {
-          id: Date.now(),
+          id: makeId(),
           phase: "Tạm ứng",
           percent: 50,
           amount: 0,
@@ -1171,7 +1230,7 @@ export default function ProcurementApp({
           date: "",
         },
         {
-          id: Date.now() + 1,
+          id: makeId(),
           phase: "Thanh toán còn lại",
           percent: 50,
           amount: 0,
@@ -2815,7 +2874,7 @@ function CreatePRCatalog({
     if (!product) return;
     setDraft((d) => ({
       ...d,
-      items: [...d.items, { ...product, id: Date.now(), qty: 1 }],
+      items: [...d.items, { ...product, id: makeId(), qty: 1 }],
     }));
     setSelectedProduct("");
   };
@@ -4742,7 +4801,7 @@ function PODetail({
                   docs: [
                     ...po.docs,
                     {
-                      id: Date.now(),
+                      id: makeId(),
                       name: "Hồ sơ mới",
                       status: "Còn thiếu",
                       note: "",
@@ -4824,7 +4883,7 @@ function PODetail({
                   payments: [
                     ...po.payments,
                     {
-                      id: Date.now(),
+                      id: makeId(),
                       phase: "Đợt mới",
                       percent: 0,
                       amount: 0,
