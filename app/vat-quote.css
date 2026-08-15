@@ -1,0 +1,70 @@
+.vat-compare-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 13px;
+}
+
+.vat-compare-toolbar button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.vat-compare-toolbar button.active {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.vat-quote-table .vat-mode-cell {
+  min-width: 112px;
+}
+
+.vat-quote-table .vat-mode-cell select,
+.vat-quote-table .vat-mode-cell input {
+  width: 100%;
+  min-width: 0;
+}
+
+.vat-quote-table .vat-mode-cell label {
+  display: grid;
+  grid-template-columns: auto minmax(44px, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.vat-quote-table .vat-converted-cell {
+  min-width: 145px;
+  font-size: 11px;
+  color: #475569;
+  line-height: 1.45;
+}
+
+.vat-quote-table .vat-converted-cell span {
+  display: block;
+  white-space: nowrap;
+}
+
+.vat-quote-table .vat-converted-cell b {
+  color: #0f172a;
+}
+
+@media print {
+  .vat-compare-toolbar {
+    display: none !important;
+  }
+}
