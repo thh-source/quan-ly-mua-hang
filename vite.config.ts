@@ -52,17 +52,17 @@ export default defineConfig(async () => {
   if (existsSync(sitesPluginPath)) {
     const { sites } = await import(pathToFileURL(sitesPluginPath).href);
     plugins.push(sites());
-
-    // Wrangler snapshots its log path while the Cloudflare plugin is imported.
-    const { cloudflare } = await import("@cloudflare/vite-plugin");
-    plugins.push(
-      cloudflare({
-        viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        inspectorPort: false,
-        config: localBindingConfig,
-      }),
-    );
   }
+
+  // Wrangler snapshots its log path while the Cloudflare plugin is imported.
+  const { cloudflare } = await import("@cloudflare/vite-plugin");
+  plugins.push(
+    cloudflare({
+      viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
+      inspectorPort: false,
+      config: localBindingConfig,
+    }),
+  );
 
   return {
     server: {
