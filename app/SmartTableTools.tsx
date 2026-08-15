@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type ColumnInfo = {
   index: number;
@@ -79,7 +79,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
     [open, setOpen] = useState(false),
     [tableName, setTableName] = useState("Bảng dữ liệu");
 
-  const apply = (
+  const apply = useCallback((
     table: HTMLTableElement,
     labels = labelsFor(table),
     syncPanel = true,
@@ -130,9 +130,9 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
         })),
       );
     }
-  };
+  }, [scopeKey]);
 
-  const activate = (
+  const activate = useCallback((
     table: HTMLTableElement,
     labels = labelsFor(table),
   ) => {
@@ -145,7 +145,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
         ?.textContent?.trim() || "Bảng dữ liệu",
     );
     apply(table, labels);
-  };
+  }, [apply, scopeKey]);
   const update = (next: ColumnInfo[]) => {
     const table = activeRef.current;
     if (!table) return;
@@ -190,7 +190,6 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
         const tables = [
           ...document.querySelectorAll<HTMLTableElement>(".app main table"),
         ].filter((table) => table.offsetParent !== null);
-        tables.forEach((table) => apply(table));
         if (!activeRef.current || activeRef.current.offsetParent === null) {
           activeRef.current = null;
           if (tables[0])
@@ -202,6 +201,8 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
               )[0],
             );
           else setColumns([]);
+        } else {
+          apply(activeRef.current);
         }
       });
     };
@@ -277,7 +278,7 @@ export default function SmartTableTools({ scopeKey }: { scopeKey: string }) {
       document.removeEventListener("mousedown", down);
       cancelAnimationFrame(frame);
     };
-  }, [scopeKey]);
+  }, [activate, apply, scopeKey]);
 
   if (!columns.length) return null;
   return (
