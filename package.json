@@ -9,9 +9,15 @@
   "scripts": {
     "install:ci": "bash scripts/install-ci.sh",
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vite",
-    "build": "bash scripts/build-verified.sh && node scripts/patch-wrangler-output.mjs",
+    "build": "vinext build",
+    "build:verified": "bash scripts/build-verified.sh",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "deploy": "npm run build && wrangler deploy -c dist/server/wrangler.json",
+    "db:create": "wrangler d1 create mua-hang-db",
+    "db:migrate": "wrangler d1 migrations apply mua-hang-db --remote",
+    "db:backup": "wrangler d1 export mua-hang-db --remote --output backups/mua-hang-db.sql",
+    "r2:create": "wrangler r2 bucket create mua-hang-files",
+    "test": "npm run build:verified && node --test tests/rendered-html.test.mjs",
     "validate:artifact": "bash scripts/validate-artifact.sh",
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate"
