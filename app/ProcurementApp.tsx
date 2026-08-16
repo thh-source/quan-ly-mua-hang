@@ -4501,10 +4501,7 @@ function SupplierManagement({
         ),
       );
   const supplierStats = (supplier: Supplier) => {
-    const rows = purchaseHistory.filter(
-        (row) =>
-          row.supplierCode === supplier.code || row.supplierName === supplier.name,
-      ),
+    const rows = supplierHistoryRows(supplier),
       stats = priceStats(rows),
       topItems = [...rows
         .reduce((map, row) => {
@@ -4521,7 +4518,7 @@ function SupplierManagement({
         }, new Map<string, { code: string; name: string; value: number; count: number }>())]
         .map(([, value]) => value)
         .sort((a, b) => b.value - a.value)
-        .slice(0, 3);
+        .slice(0, 5);
     return {
       ...stats,
       itemCount: new Set(rows.map((row) => row.itemCode)).size,
@@ -4542,6 +4539,11 @@ function SupplierManagement({
       .toLowerCase()
       .includes(normalizedSupplierQuery),
   );
+  const selectedSupplier = shownSuppliers.find(
+      (supplier) => supplier.id === selectedSupplierId,
+    ),
+    selectedRows = selectedSupplier ? supplierHistoryRows(selectedSupplier) : [],
+    selectedStats = selectedSupplier ? supplierStats(selectedSupplier) : null;
   return (
     <section className="content supplier-page">
       <div className="heading">
@@ -4581,163 +4583,225 @@ function SupplierManagement({
         </label>
         <span>{shownSuppliers.length} / {suppliers.length} nhà cung cấp</span>
       </div>
-      <div className="supplier-grid">
-        {shownSuppliers.map((s) => {
-          const stats = supplierStats(s),
-            rows = supplierHistoryRows(s);
-          return (
-          <article
-            key={s.id}
-            className={`supplier-card ${selectedSupplierId === s.id ? "active" : ""}`}
-          >
-            <div className="supplier-card-head">
-              <span>{s.code}</span>
-              <button
-                type="button"
-                className="supplier-name-button"
-                onClick={() =>
-                  setSelectedSupplierId(selectedSupplierId === s.id ? null : s.id)
-                }
-              >
-                <strong>{s.name}</strong>
-                <small>{selectedSupplierId === s.id ? "Ẩn lịch sử mua" : "Xem lịch sử mua"}</small>
-              </button>
-              <i>Đang hoạt động</i>
-            </div>
-            <div className="supplier-history-kpis">
-              <span>
-                <b>{fmt(stats.totalValue)} ₫</b>
-                <small>Giá trị T1-T7</small>
-              </span>
-              <span>
-                <b>{stats.count}</b>
-                <small>Lượt mua</small>
-              </span>
-              <span>
-                <b>{stats.itemCount}</b>
-                <small>Mã hàng</small>
-              </span>
-            </div>
-            {!!stats.topItems.length && (
-              <div className="supplier-top-items">
-                {stats.topItems.map((item) => (
-                  <small key={item.code}>
-                    {item.code} · {item.name} · {fmt(item.value)} ₫
-                  </small>
-                ))}
-              </div>
+      <div className="supplier-list-panel">
+        <table className="supplier-list-table">
+          <thead>
+            <tr>
+              <th>Mã NCC</th>
+              <th>Tên nhà cung cấp</th>
+              <th>Người liên hệ</th>
+              <th>Điện thoại</th>
+              <th>Giá trị T1-T7</th>
+              <th>Lượt mua</th>
+              <th>Mã hàng</th>
+            </tr>
+          </thead>
+          <tbody>
+            {!shownSuppliers.length && (
+              <tr>
+                <td colSpan={7}>Không tìm thấy nhà cung cấp phù hợp.</td>
+              </tr>
             )}
-            <div className="supplier-fields">
-              <label>
-                Mã nhà cung cấp
-                <input
-                  value={s.code}
-                  onChange={(e) => update(s.id, "code", e.target.value)}
-                />
-              </label>
-              <label>
-                Tên nhà cung cấp
-                <input
-                  value={s.name}
-                  onChange={(e) => update(s.id, "name", e.target.value)}
-                />
-              </label>
-              <label>
-                Số tài khoản
-                <input
-                  value={s.bankAccount}
-                  onChange={(e) => update(s.id, "bankAccount", e.target.value)}
-                />
-              </label>
-              <label>
-                Ngân hàng
-                <input
-                  value={s.bank}
-                  onChange={(e) => update(s.id, "bank", e.target.value)}
-                />
-              </label>
-              <label className="full">
-                Địa chỉ
-                <input
-                  value={s.address}
-                  onChange={(e) => update(s.id, "address", e.target.value)}
-                />
-              </label>
-              <label>
-                Người liên hệ
-                <input
-                  value={s.contact}
-                  onChange={(e) => update(s.id, "contact", e.target.value)}
-                />
-              </label>
-              <label>
-                Điện thoại
-                <input
-                  value={s.phone}
-                  onChange={(e) => update(s.id, "phone", e.target.value)}
-                />
-              </label>
-            </div>
-            {selectedSupplierId === s.id && (
-              <div className="supplier-purchase-history">
-                <div className="supplier-history-title">
-                  <div>
-                    <h3>Lịch sử mua · {s.name}</h3>
-                    <p>Tra cứu nhanh các lần nhập kho theo nhà cung cấp.</p>
-                  </div>
-                  <span>{rows.length} dòng</span>
-                </div>
-                <div className="supplier-history-table">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Ngày mua</th>
-                        <th>Chứng từ / PO</th>
-                        <th>Mã hàng</th>
-                        <th>Tên hàng hóa</th>
-                        <th>Số lượng</th>
-                        <th>Đơn giá</th>
-                        <th>Thành tiền</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!rows.length && (
-                        <tr>
-                          <td colSpan={7}>Chưa có lịch sử mua với nhà cung cấp này.</td>
-                        </tr>
-                      )}
-                      {rows.map((row) => (
-                        <tr key={row.id}>
-                          <td>{dateVN(row.documentDate || row.accountingDate)}</td>
-                          <td>
-                            <b>{row.documentNo || row.invoiceNo || "Nhập kho"}</b>
-                            <small>{row.warehouseName}</small>
-                          </td>
-                          <td>{row.itemCode}</td>
-                          <td>
-                            <b>{row.itemName}</b>
-                            <small>{row.description}</small>
-                          </td>
-                          <td>
-                            {fmt(row.quantity)} {row.unit}
-                          </td>
-                          <td className="money">{fmt(row.unitPrice)} ₫</td>
-                          <td className="money">{fmt(row.value)} ₫</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-          </article>
-          );
-        })}
+            {shownSuppliers.map((supplier) => {
+              const stats = supplierStats(supplier);
+              return (
+                <tr
+                  key={supplier.id}
+                  className={
+                    selectedSupplierId === supplier.id ? "selected" : ""
+                  }
+                >
+                  <td>
+                    <b className="supplier-list-code">{supplier.code}</b>
+                  </td>
+                  <td>
+                    <button
+                      type="button"
+                      className="supplier-list-name"
+                      onClick={() =>
+                        setSelectedSupplierId(
+                          selectedSupplierId === supplier.id
+                            ? null
+                            : supplier.id,
+                        )
+                      }
+                    >
+                      {supplier.name || "Chưa đặt tên NCC"}
+                    </button>
+                    <small>{supplier.bank || supplier.address || "Chưa có thông tin phụ"}</small>
+                  </td>
+                  <td>{supplier.contact || "—"}</td>
+                  <td>{supplier.phone || "—"}</td>
+                  <td className="money">{fmt(stats.totalValue)} ₫</td>
+                  <td>{stats.count}</td>
+                  <td>{stats.itemCount}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
+      {selectedSupplier && selectedStats && (
+        <section className="supplier-detail-panel">
+          <div className="supplier-detail-heading">
+            <div>
+              <em>{selectedSupplier.code}</em>
+              <h2>{selectedSupplier.name}</h2>
+              <p>Thông tin chi tiết và lịch sử nhập kho theo nhà cung cấp.</p>
+            </div>
+            <button
+              className="ghost"
+              type="button"
+              onClick={() => setSelectedSupplierId(null)}
+            >
+              Đóng chi tiết
+            </button>
+          </div>
+          <div className="supplier-history-kpis compact">
+            <span>
+              <b>{fmt(selectedStats.totalValue)} ₫</b>
+              <small>Giá trị T1-T7</small>
+            </span>
+            <span>
+              <b>{selectedStats.count}</b>
+              <small>Lượt mua</small>
+            </span>
+            <span>
+              <b>{selectedStats.itemCount}</b>
+              <small>Mã hàng</small>
+            </span>
+          </div>
+          {!!selectedStats.topItems.length && (
+            <div className="supplier-top-items compact">
+              {selectedStats.topItems.map((item) => (
+                <small key={item.code}>
+                  {item.code} · {item.name} · {fmt(item.value)} ₫
+                </small>
+              ))}
+            </div>
+          )}
+          <div className="supplier-fields">
+            <label>
+              Mã nhà cung cấp
+              <input
+                value={selectedSupplier.code}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "code", e.target.value)
+                }
+              />
+            </label>
+            <label>
+              Tên nhà cung cấp
+              <input
+                value={selectedSupplier.name}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "name", e.target.value)
+                }
+              />
+            </label>
+            <label>
+              Số tài khoản
+              <input
+                value={selectedSupplier.bankAccount}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "bankAccount", e.target.value)
+                }
+              />
+            </label>
+            <label>
+              Ngân hàng
+              <input
+                value={selectedSupplier.bank}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "bank", e.target.value)
+                }
+              />
+            </label>
+            <label className="full">
+              Địa chỉ
+              <input
+                value={selectedSupplier.address}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "address", e.target.value)
+                }
+              />
+            </label>
+            <label>
+              Người liên hệ
+              <input
+                value={selectedSupplier.contact}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "contact", e.target.value)
+                }
+              />
+            </label>
+            <label>
+              Điện thoại
+              <input
+                value={selectedSupplier.phone}
+                onChange={(e) =>
+                  update(selectedSupplier.id, "phone", e.target.value)
+                }
+              />
+            </label>
+          </div>
+          <div className="supplier-purchase-history">
+            <div className="supplier-history-title">
+              <div>
+                <h3>Lịch sử mua · {selectedSupplier.name}</h3>
+                <p>Tra cứu nhanh các lần nhập kho theo nhà cung cấp.</p>
+              </div>
+              <span>{selectedRows.length} dòng</span>
+            </div>
+            <div className="supplier-history-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ngày mua</th>
+                    <th>Chứng từ / PO</th>
+                    <th>Mã hàng</th>
+                    <th>Tên hàng hóa</th>
+                    <th>Số lượng</th>
+                    <th>Đơn giá</th>
+                    <th>Thành tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!selectedRows.length && (
+                    <tr>
+                      <td colSpan={7}>
+                        Chưa có lịch sử mua với nhà cung cấp này.
+                      </td>
+                    </tr>
+                  )}
+                  {selectedRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>{dateVN(row.documentDate || row.accountingDate)}</td>
+                      <td>
+                        <b>{row.documentNo || row.invoiceNo || "Nhập kho"}</b>
+                        <small>{row.warehouseName}</small>
+                      </td>
+                      <td>{row.itemCode}</td>
+                      <td>
+                        <b>{row.itemName}</b>
+                        <small>{row.description}</small>
+                      </td>
+                      <td>
+                        {fmt(row.quantity)} {row.unit}
+                      </td>
+                      <td className="money">{fmt(row.unitPrice)} ₫</td>
+                      <td className="money">{fmt(row.value)} ₫</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
     </section>
   );
 }
-
 function POList({
   pos,
   suppliers,
