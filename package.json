@@ -1,7 +1,7 @@
 {
   "name": "bang-tong-hop-mua-hang",
   "displayName": "Bảng tổng hợp mua hàng",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
