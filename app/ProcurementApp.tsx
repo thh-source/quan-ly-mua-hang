@@ -2846,6 +2846,17 @@ function ProductCatalog({
       </div>
       <div className="product-table">
         <table>
+          <colgroup>
+            <col className="product-col-code" />
+            <col className="product-col-name" />
+            <col className="product-col-category" />
+            <col className="product-col-spec" />
+            <col className="product-col-unit" />
+            <col className="product-col-price" />
+            <col className="product-col-latest" />
+            <col className="product-col-change" />
+            <col className="product-col-action" />
+          </colgroup>
           <thead>
             <tr>
               <th>Mã hàng</th>
@@ -2872,7 +2883,7 @@ function ProductCatalog({
                       )
                     : 0;
               return (
-                <tbody key={p.id} className="product-group">
+                <React.Fragment key={p.id}>
                   <tr>
                     <td>
                       <b className="product-code">{p.code}</b>
@@ -2964,7 +2975,7 @@ function ProductCatalog({
                       </td>
                     </tr>
                   )}
-                </tbody>
+                </React.Fragment>
               );
             })}
           </tbody>
@@ -4469,10 +4480,26 @@ function SupplierManagement({
   onAdd: () => void;
   purchaseHistory: PurchaseHistory[];
 }) {
+  const [supplierQuery, setSupplierQuery] = useState("");
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(
+    null,
+  );
   const update = (id: number, key: keyof Supplier, value: string) =>
     setSuppliers((list) =>
       list.map((s) => (s.id === id ? { ...s, [key]: value } : s)),
     );
+  const supplierHistoryRows = (supplier: Supplier) =>
+    purchaseHistory
+      .filter(
+        (row) =>
+          row.supplierCode === supplier.code ||
+          row.supplierName === supplier.name,
+      )
+      .sort((a, b) =>
+        (b.documentDate || b.accountingDate).localeCompare(
+          a.documentDate || a.accountingDate,
+        ),
+      );
   const supplierStats = (supplier: Supplier) => {
     const rows = purchaseHistory.filter(
         (row) =>
@@ -4501,6 +4528,20 @@ function SupplierManagement({
       topItems,
     };
   };
+  const normalizedSupplierQuery = supplierQuery.trim().toLowerCase();
+  const shownSuppliers = suppliers.filter((supplier) =>
+    [
+      supplier.code,
+      supplier.name,
+      supplier.contact,
+      supplier.phone,
+      supplier.bank,
+      supplier.address,
+    ]
+      .join(" ")
+      .toLowerCase()
+      .includes(normalizedSupplierQuery),
+  );
   return (
     <section className="content supplier-page">
       <div className="heading">
@@ -4529,14 +4570,38 @@ function SupplierManagement({
           <b>{purchaseHistory.length}</b> dòng lịch sử nhập kho
         </span>
       </div>
+      <div className="supplier-toolbar">
+        <label>
+          ⌕
+          <input
+            value={supplierQuery}
+            onChange={(e) => setSupplierQuery(e.target.value)}
+            placeholder="Tìm nhanh mã, tên NCC, người liên hệ, SĐT..."
+          />
+        </label>
+        <span>{shownSuppliers.length} / {suppliers.length} nhà cung cấp</span>
+      </div>
       <div className="supplier-grid">
-        {suppliers.map((s) => {
-          const stats = supplierStats(s);
+        {shownSuppliers.map((s) => {
+          const stats = supplierStats(s),
+            rows = supplierHistoryRows(s);
           return (
-          <article key={s.id} className="supplier-card">
+          <article
+            key={s.id}
+            className={`supplier-card ${selectedSupplierId === s.id ? "active" : ""}`}
+          >
             <div className="supplier-card-head">
               <span>{s.code}</span>
-              <strong>{s.name}</strong>
+              <button
+                type="button"
+                className="supplier-name-button"
+                onClick={() =>
+                  setSelectedSupplierId(selectedSupplierId === s.id ? null : s.id)
+                }
+              >
+                <strong>{s.name}</strong>
+                <small>{selectedSupplierId === s.id ? "Ẩn lịch sử mua" : "Xem lịch sử mua"}</small>
+              </button>
               <i>Đang hoạt động</i>
             </div>
             <div className="supplier-history-kpis">
@@ -4613,6 +4678,58 @@ function SupplierManagement({
                 />
               </label>
             </div>
+            {selectedSupplierId === s.id && (
+              <div className="supplier-purchase-history">
+                <div className="supplier-history-title">
+                  <div>
+                    <h3>Lịch sử mua · {s.name}</h3>
+                    <p>Tra cứu nhanh các lần nhập kho theo nhà cung cấp.</p>
+                  </div>
+                  <span>{rows.length} dòng</span>
+                </div>
+                <div className="supplier-history-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Ngày mua</th>
+                        <th>Chứng từ / PO</th>
+                        <th>Mã hàng</th>
+                        <th>Tên hàng hóa</th>
+                        <th>Số lượng</th>
+                        <th>Đơn giá</th>
+                        <th>Thành tiền</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {!rows.length && (
+                        <tr>
+                          <td colSpan={7}>Chưa có lịch sử mua với nhà cung cấp này.</td>
+                        </tr>
+                      )}
+                      {rows.map((row) => (
+                        <tr key={row.id}>
+                          <td>{dateVN(row.documentDate || row.accountingDate)}</td>
+                          <td>
+                            <b>{row.documentNo || row.invoiceNo || "Nhập kho"}</b>
+                            <small>{row.warehouseName}</small>
+                          </td>
+                          <td>{row.itemCode}</td>
+                          <td>
+                            <b>{row.itemName}</b>
+                            <small>{row.description}</small>
+                          </td>
+                          <td>
+                            {fmt(row.quantity)} {row.unit}
+                          </td>
+                          <td className="money">{fmt(row.unitPrice)} ₫</td>
+                          <td className="money">{fmt(row.value)} ₫</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </article>
           );
         })}
