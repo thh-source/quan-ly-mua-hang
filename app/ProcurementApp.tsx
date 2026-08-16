@@ -1,6 +1,7 @@
 "use client";
 import {
   ChangeEvent,
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -2883,7 +2884,7 @@ function ProductCatalog({
                       )
                     : 0;
               return (
-                <React.Fragment key={p.id}>
+                <Fragment key={p.id}>
                   <tr>
                     <td>
                       <b className="product-code">{p.code}</b>
@@ -2975,7 +2976,7 @@ function ProductCatalog({
                       </td>
                     </tr>
                   )}
-                </React.Fragment>
+                </Fragment>
               );
             })}
           </tbody>
