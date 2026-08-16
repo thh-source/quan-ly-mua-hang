@@ -1,17 +1,29 @@
 .product-page{padding-top:28px}.product-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:15px}.product-kpis article{background:white;border:1px solid var(--line);border-radius:8px;padding:14px 16px;display:flex;flex-direction:column;gap:4px}.product-kpis span,.product-kpis small{font-size:10px;color:var(--muted)}.product-kpis b{font-size:20px}.product-toolbar{height:55px;background:white;border:1px solid var(--line);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:10px;padding:9px 12px}.product-toolbar label{width:360px;height:36px;border:1px solid #d8e1eb;border-radius:6px;display:flex;align-items:center;padding:0 10px;color:var(--muted)}.product-toolbar input{border:0;outline:0;width:100%;padding-left:7px}.product-toolbar select{height:36px;border:1px solid #d8e1eb;border-radius:6px;background:white;padding:0 10px}.product-toolbar>span{margin-left:auto;color:var(--muted);font-size:10px}.product-table{background:white;border:1px solid var(--line);border-top:0;border-radius:0 0 8px 8px;overflow:auto;max-width:100%;position:relative}.product-table table{width:max-content;min-width:1280px;table-layout:fixed;border-collapse:collapse}.product-table .product-col-code{width:88px}.product-table .product-col-name{width:330px}.product-table .product-col-category{width:128px}.product-table .product-col-spec{width:220px}.product-table .product-col-unit{width:70px}.product-table .product-col-price{width:138px}.product-table .product-col-latest{width:260px}.product-table .product-col-change{width:112px}.product-table .product-col-action{width:104px}.product-table th{position:static;height:39px;white-space:nowrap}.product-table td{height:58px;vertical-align:top;line-height:1.35;white-space:normal;overflow-wrap:break-word;word-break:normal}.product-table td>strong,.product-table td>small{display:block}.product-table td>small{color:var(--muted);font-size:9px;margin-top:4px}.product-table .money{text-align:right;white-space:normal;font-variant-numeric:tabular-nums}.product-table .history-btn{width:100%;min-height:36px;white-space:normal;line-height:1.2}.product-code{color:var(--blue)}.category-pill{background:#eef5ff;color:#2868b1;padding:5px 8px;border-radius:11px;font-size:9px}.price-down{color:#168446;background:#e8f7ed;padding:5px 7px;border-radius:10px;font-weight:700}.price-up{color:#ca4d37;background:#fff0ed;padding:5px 7px;border-radius:10px;font-weight:700}.history-btn{border:1px solid #bad0e8;background:white;color:#1767bf;border-radius:5px;padding:6px 8px;font-size:9px}.product-table .history-row>td{padding:0;background:#f6f9fc;height:auto}.price-history{padding:16px 20px;max-width:100%;overflow:auto}.price-history>div{display:flex;align-items:end;justify-content:space-between;margin-bottom:12px}.price-history h3{font-size:13px;margin:0 0 3px}.price-history p{font-size:9px;color:var(--muted);margin:0}.price-history table{min-width:750px;background:white;border:1px solid #dce5ee;border-radius:6px}.price-history th{background:#edf4fb}.price-history td{height:38px}.catalog-picker{display:flex;align-items:flex-end;gap:12px;padding:15px 20px;background:#f7faff;border-bottom:1px solid var(--line)}.catalog-picker>div{display:flex;align-items:flex-end;gap:8px}.catalog-picker label{display:flex;flex-direction:column;gap:6px;font-size:10px;font-weight:700}.catalog-picker select{width:370px;height:40px;border:1px solid #cbd8e5;border-radius:6px;background:white;padding:0 10px}.catalog-picker>span{align-self:center;color:var(--muted);font-size:10px}.new-product-btn{height:40px;border:1px dashed #6fa5e7;border-radius:6px;background:white;color:var(--blue);padding:0 13px;font-weight:700}.catalog-picker>small{align-self:center;color:var(--muted);font-size:9px;margin-left:auto}
 @media(max-width:1100px){.product-kpis{grid-template-columns:1fr 1fr}.catalog-picker{align-items:stretch;flex-direction:column}.catalog-picker>div{align-items:stretch}.catalog-picker select{width:100%}.catalog-picker>span{display:none}.catalog-picker>small{margin-left:0}}@media(max-width:700px){.product-kpis{grid-template-columns:1fr}.product-toolbar{height:auto;align-items:stretch;flex-direction:column}.product-toolbar label{width:100%}.catalog-picker>div{flex-direction:column}.catalog-picker .primary{width:100%}}
 
-
-/* Supplier lookup and purchase history */
+/* Supplier lookup, list and purchase history */
 .supplier-toolbar{display:flex;align-items:center;gap:10px;margin:0 0 14px;padding:10px 12px;background:white;border:1px solid var(--line);border-radius:8px}
 .supplier-toolbar label{height:38px;min-width:320px;flex:1;border:1px solid #d8e1eb;border-radius:6px;display:flex;align-items:center;padding:0 10px;color:var(--muted)}
 .supplier-toolbar input{width:100%;border:0;outline:0;padding-left:7px;background:transparent}
 .supplier-toolbar span{font-size:10px;color:var(--muted);white-space:nowrap}
-.supplier-card.active{border-color:#9fc5f4;box-shadow:0 8px 24px #1672f314}
-.supplier-name-button{border:0;background:transparent;padding:0;text-align:left;color:inherit;min-width:0}
-.supplier-name-button strong{display:block;color:var(--blue);text-decoration:underline;text-underline-offset:3px}
-.supplier-name-button small{display:block;margin-top:3px;color:var(--muted);font-size:9px;font-weight:600}
-.supplier-purchase-history{grid-column:1/-1;margin-top:14px;border-top:1px solid #e2eaf3;padding-top:14px}
+.supplier-list-panel{background:white;border:1px solid var(--line);border-radius:8px;overflow:auto}
+.supplier-list-table{width:100%;min-width:980px;border-collapse:collapse;table-layout:fixed}
+.supplier-list-table th{height:38px;background:#f3f7fb;color:#24415f;font-size:10px;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+.supplier-list-table td{height:48px;border-top:1px solid #e3ebf3;vertical-align:middle;white-space:normal;overflow-wrap:break-word;word-break:normal}
+.supplier-list-table tr.selected td{background:#eef6ff}
+.supplier-list-table tr:hover td{background:#f7fbff}
+.supplier-list-code{display:inline-flex;align-items:center;min-height:24px;border-radius:5px;background:#eef5ff;color:#1263d8;padding:0 8px;font-size:10px}
+.supplier-list-name{border:0;background:transparent;color:var(--blue);font-weight:800;text-align:left;padding:0;text-decoration:underline;text-underline-offset:3px}
+.supplier-list-table td small{display:block;margin-top:3px;color:var(--muted);font-size:9px}
+.supplier-list-table .money{text-align:right;font-variant-numeric:tabular-nums}
+.supplier-detail-panel{margin-top:14px;background:white;border:1px solid #bcd5f1;border-radius:8px;padding:16px 18px;box-shadow:0 8px 24px #1672f312}
+.supplier-detail-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:13px}
+.supplier-detail-heading em{font-style:normal;color:var(--blue);font-size:10px;font-weight:800;letter-spacing:.08em}
+.supplier-detail-heading h2{margin:4px 0 3px;font-size:19px}
+.supplier-detail-heading p{margin:0;color:var(--muted);font-size:11px}
+.supplier-history-kpis.compact{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+.supplier-top-items.compact{margin-bottom:14px}
+.supplier-purchase-history{margin-top:16px;border-top:1px solid #e2eaf3;padding-top:14px}
 .supplier-history-title{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:10px}
 .supplier-history-title h3{margin:0 0 3px;font-size:13px}
 .supplier-history-title p{margin:0;color:var(--muted);font-size:10px}
@@ -23,4 +35,4 @@
 .supplier-history-table td b,.supplier-history-table td small{display:block}
 .supplier-history-table td small{margin-top:3px;color:var(--muted);font-size:9px}
 .supplier-history-table .money{text-align:right;font-variant-numeric:tabular-nums}
-@media(max-width:700px){.supplier-toolbar{align-items:stretch;flex-direction:column}.supplier-toolbar label{min-width:0;width:100%}.supplier-toolbar span{white-space:normal}.product-table table{min-width:1120px}}
+@media(max-width:700px){.supplier-toolbar,.supplier-detail-heading{align-items:stretch;flex-direction:column}.supplier-toolbar label{min-width:0;width:100%}.supplier-toolbar span{white-space:normal}.supplier-detail-panel{padding:13px}.supplier-history-kpis.compact{grid-template-columns:1fr}.product-table table{min-width:1120px}}
