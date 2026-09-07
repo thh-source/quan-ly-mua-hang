@@ -7,7 +7,7 @@ import { and, desc, eq, like, or, sql } from "drizzle-orm";
 
 type Bindings = {
   DB: D1Database;
-  FILES: R2Bucket;
+  BUCKET: R2Bucket;
   ENVIRONMENT: string;
 };
 
