@@ -7,8 +7,8 @@
     "dev": "wrangler dev",
     "build": "wrangler deploy --dry-run",
     "typecheck": "tsc --noEmit",
-    "db:migrate:local": "wrangler d1 migrations apply SCMH_DB --local",
-    "db:migrate:remote": "wrangler d1 migrations apply SCMH_DB --remote"
+    "db:migrate:local": "wrangler d1 migrations apply mua-hang-db --local",
+    "db:migrate:remote": "wrangler d1 migrations apply mua-hang-db --remote"
   },
   "dependencies": {
     "@scmh/database": "workspace:*",
