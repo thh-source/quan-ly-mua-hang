@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "build": "wrangler deploy --dry-run",
+    "build": "wrangler deploy --dry-run --config wrangler.toml",
     "typecheck": "tsc --noEmit",
-    "db:migrate:local": "wrangler d1 migrations apply mua-hang-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply mua-hang-db --remote"
+    "db:migrate:local": "wrangler d1 migrations apply mua-hang-db --local --config wrangler.toml",
+    "db:migrate:remote": "wrangler d1 migrations apply mua-hang-db --remote --config wrangler.toml",
+    "deploy": "wrangler deploy --config wrangler.toml"
   },
   "dependencies": {
     "@scmh/database": "workspace:*",
