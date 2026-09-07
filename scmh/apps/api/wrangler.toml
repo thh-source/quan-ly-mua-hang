@@ -1,0 +1,19 @@
+name = "scmh-api-rebuild"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+[vars]
+ENVIRONMENT = "development"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "SCMH_DB"
+database_id = "REPLACE_WITH_EXISTING_OR_NEW_D1_ID"
+migrations_dir = "../../packages/database/migrations"
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "REPLACE_WITH_EXISTING_OR_NEW_R2_BUCKET"
+
+[observability]
+enabled = true
