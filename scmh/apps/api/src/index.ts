@@ -40,28 +40,27 @@ app.post("/api/v1/products", async (c) => {
   const productId = id();
   const ts = now();
   try {
-    await db.transaction(async (tx) => {
-      await tx.insert(products).values({
-        id: productId,
-        code: value.code,
-        name: value.name,
-        canonicalName: value.canonicalName,
-        normalizedName: normalizeText(value.canonicalName),
-        categoryId: value.categoryId ?? null,
-        unit: value.unit,
-        brand: value.brand ?? null,
-        manufacturer: value.manufacturer ?? null,
-        technicalDescription: value.technicalDescription ?? null,
-        specification: value.specification ?? null,
-        status: value.status,
-        notes: value.notes ?? null,
-        createdAt: ts,
-        updatedAt: ts
-      });
-      for (const alias of value.aliases) {
-        await tx.insert(productAliases).values({ id: id(), productId, alias, normalizedAlias: normalizeText(alias), createdAt: ts });
-      }
-    });
+    const statements: D1PreparedStatement[] = [
+      c.env.DB.prepare(`
+        INSERT INTO products (
+          id, code, name, canonical_name, normalized_name, category_id, unit, brand,
+          manufacturer, technical_description, specification, status, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        productId, value.code, value.name, value.canonicalName, normalizeText(value.canonicalName),
+        value.categoryId ?? null, value.unit, value.brand ?? null, value.manufacturer ?? null,
+        value.technicalDescription ?? null, value.specification ?? null, value.status,
+        value.notes ?? null, ts, ts
+      )
+    ];
+    for (const alias of value.aliases) {
+      statements.push(
+        c.env.DB.prepare(
+          "INSERT INTO product_aliases (id, product_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?, ?)"
+        ).bind(id(), productId, alias, normalizeText(alias), ts)
+      );
+    }
+    await c.env.DB.batch(statements);
     return c.json(ok({ id: productId }), 201);
   } catch {
     return c.json(fail("PRODUCT_CONFLICT", "Mã hàng hóa đã tồn tại hoặc dữ liệu bị trùng."), 409);
@@ -74,19 +73,30 @@ app.put("/api/v1/products/:id", async (c) => {
   const db = drizzle(c.env.DB);
   const value = parsed.data;
   const productId = c.req.param("id");
-  await db.transaction(async (tx) => {
-    await tx.update(products).set({
-      code: value.code, name: value.name, canonicalName: value.canonicalName,
-      normalizedName: normalizeText(value.canonicalName), categoryId: value.categoryId ?? null,
-      unit: value.unit, brand: value.brand ?? null, manufacturer: value.manufacturer ?? null,
-      technicalDescription: value.technicalDescription ?? null, specification: value.specification ?? null,
-      status: value.status, notes: value.notes ?? null, updatedAt: now()
-    }).where(eq(products.id, productId));
-    await tx.delete(productAliases).where(eq(productAliases.productId, productId));
-    for (const alias of value.aliases) {
-      await tx.insert(productAliases).values({ id: id(), productId, alias, normalizedAlias: normalizeText(alias), createdAt: now() });
-    }
-  });
+  const ts = now();
+  const statements: D1PreparedStatement[] = [
+    c.env.DB.prepare(`
+      UPDATE products SET
+        code = ?, name = ?, canonical_name = ?, normalized_name = ?, category_id = ?, unit = ?,
+        brand = ?, manufacturer = ?, technical_description = ?, specification = ?, status = ?,
+        notes = ?, updated_at = ?
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(
+      value.code, value.name, value.canonicalName, normalizeText(value.canonicalName),
+      value.categoryId ?? null, value.unit, value.brand ?? null, value.manufacturer ?? null,
+      value.technicalDescription ?? null, value.specification ?? null, value.status,
+      value.notes ?? null, ts, productId
+    ),
+    c.env.DB.prepare("DELETE FROM product_aliases WHERE product_id = ?").bind(productId)
+  ];
+  for (const alias of value.aliases) {
+    statements.push(
+      c.env.DB.prepare(
+        "INSERT INTO product_aliases (id, product_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?, ?)"
+      ).bind(id(), productId, alias, normalizeText(alias), ts)
+    );
+  }
+  await c.env.DB.batch(statements);
   return c.json(ok({ id: productId }));
 });
 
@@ -115,19 +125,27 @@ app.post("/api/v1/suppliers", async (c) => {
   const supplierId = id();
   const ts = now();
   try {
-    await db.transaction(async (tx) => {
-      await tx.insert(suppliers).values({
-        id: supplierId, code: value.code, name: value.name, canonicalName: value.canonicalName,
-        normalizedName: normalizeText(value.canonicalName), taxCode: value.taxCode || null,
-        address: value.address ?? null, contact: value.contact ?? null, phone: value.phone ?? null,
-        email: value.email || null, bank: value.bank ?? null, bankAccount: value.bankAccount ?? null,
-        accountHolder: value.accountHolder ?? null, status: value.status, notes: value.notes ?? null,
-        createdAt: ts, updatedAt: ts
-      });
-      for (const alias of value.aliases) {
-        await tx.insert(supplierAliases).values({ id: id(), supplierId, alias, normalizedAlias: normalizeText(alias), createdAt: ts });
-      }
-    });
+    const statements: D1PreparedStatement[] = [
+      c.env.DB.prepare(`
+        INSERT INTO suppliers (
+          id, code, name, canonical_name, normalized_name, tax_code, address, contact, phone,
+          email, bank, bank_account, account_holder, status, notes, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        supplierId, value.code, value.name, value.canonicalName, normalizeText(value.canonicalName),
+        value.taxCode || null, value.address ?? null, value.contact ?? null, value.phone ?? null,
+        value.email || null, value.bank ?? null, value.bankAccount ?? null, value.accountHolder ?? null,
+        value.status, value.notes ?? null, ts, ts
+      )
+    ];
+    for (const alias of value.aliases) {
+      statements.push(
+        c.env.DB.prepare(
+          "INSERT INTO supplier_aliases (id, supplier_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?, ?)"
+        ).bind(id(), supplierId, alias, normalizeText(alias), ts)
+      );
+    }
+    await c.env.DB.batch(statements);
     return c.json(ok({ id: supplierId }), 201);
   } catch {
     return c.json(fail("SUPPLIER_CONFLICT", "Mã nhà cung cấp hoặc mã số thuế đã tồn tại."), 409);
@@ -140,19 +158,30 @@ app.put("/api/v1/suppliers/:id", async (c) => {
   const db = drizzle(c.env.DB);
   const value = parsed.data;
   const supplierId = c.req.param("id");
-  await db.transaction(async (tx) => {
-    await tx.update(suppliers).set({
-      code: value.code, name: value.name, canonicalName: value.canonicalName,
-      normalizedName: normalizeText(value.canonicalName), taxCode: value.taxCode || null,
-      address: value.address ?? null, contact: value.contact ?? null, phone: value.phone ?? null,
-      email: value.email || null, bank: value.bank ?? null, bankAccount: value.bankAccount ?? null,
-      accountHolder: value.accountHolder ?? null, status: value.status, notes: value.notes ?? null, updatedAt: now()
-    }).where(eq(suppliers.id, supplierId));
-    await tx.delete(supplierAliases).where(eq(supplierAliases.supplierId, supplierId));
-    for (const alias of value.aliases) {
-      await tx.insert(supplierAliases).values({ id: id(), supplierId, alias, normalizedAlias: normalizeText(alias), createdAt: now() });
-    }
-  });
+  const ts = now();
+  const statements: D1PreparedStatement[] = [
+    c.env.DB.prepare(`
+      UPDATE suppliers SET
+        code = ?, name = ?, canonical_name = ?, normalized_name = ?, tax_code = ?, address = ?,
+        contact = ?, phone = ?, email = ?, bank = ?, bank_account = ?, account_holder = ?,
+        status = ?, notes = ?, updated_at = ?
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(
+      value.code, value.name, value.canonicalName, normalizeText(value.canonicalName), value.taxCode || null,
+      value.address ?? null, value.contact ?? null, value.phone ?? null, value.email || null,
+      value.bank ?? null, value.bankAccount ?? null, value.accountHolder ?? null, value.status,
+      value.notes ?? null, ts, supplierId
+    ),
+    c.env.DB.prepare("DELETE FROM supplier_aliases WHERE supplier_id = ?").bind(supplierId)
+  ];
+  for (const alias of value.aliases) {
+    statements.push(
+      c.env.DB.prepare(
+        "INSERT INTO supplier_aliases (id, supplier_id, alias, normalized_alias, created_at) VALUES (?, ?, ?, ?, ?)"
+      ).bind(id(), supplierId, alias, normalizeText(alias), ts)
+    );
+  }
+  await c.env.DB.batch(statements);
   return c.json(ok({ id: supplierId }));
 });
 
@@ -206,9 +235,15 @@ app.post("/api/v1/normalization/match", async (c) => {
   }
   const db = drizzle(c.env.DB);
   const normalized = normalizeText(body.rawValue);
-  const source = body.entityType === "product" ? products : suppliers;
-  const candidates = await db.select({ id: source.id, name: source.name, normalizedName: source.normalizedName })
-    .from(source).where(like(source.normalizedName, `%${normalized}%`)).limit(10);
+  const candidates = body.entityType === "product"
+    ? await db.select({ id: products.id, name: products.name, normalizedName: products.normalizedName })
+        .from(products)
+        .where(and(sql`${products.deletedAt} is null`, like(products.normalizedName, `%${normalized}%`)))
+        .limit(10)
+    : await db.select({ id: suppliers.id, name: suppliers.name, normalizedName: suppliers.normalizedName })
+        .from(suppliers)
+        .where(and(sql`${suppliers.deletedAt} is null`, like(suppliers.normalizedName, `%${normalized}%`)))
+        .limit(10);
   const exact = candidates.find((x) => x.normalizedName === normalized);
   const confidenceBps = exact ? 10000 : candidates.length ? 7000 : 0;
   const matchId = id();
