@@ -1,19 +1,19 @@
-name = "scmh-api-rebuild"
+name = "quan-ly-mua-hang-scmh-rebuild"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 
 [vars]
-ENVIRONMENT = "development"
+ENVIRONMENT = "staging"
 
 [[d1_databases]]
 binding = "DB"
-database_name = "SCMH_DB"
-database_id = "REPLACE_WITH_EXISTING_OR_NEW_D1_ID"
+database_name = "mua-hang-db"
+database_id = "b9758dfb-ea50-4534-8372-7798ec7fb9e6"
 migrations_dir = "../../packages/database/migrations"
 
 [[r2_buckets]]
-binding = "FILES"
-bucket_name = "REPLACE_WITH_EXISTING_OR_NEW_R2_BUCKET"
+binding = "BUCKET"
+bucket_name = "mua-hang-files"
 
 [observability]
 enabled = true
