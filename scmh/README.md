@@ -22,7 +22,7 @@ This rebuild is isolated under `scmh/` so the legacy application can remain unto
 ```bash
 cd scmh
 pnpm install
-pnpm --filter @scmh/api db:generate
+pnpm --filter @scmh/api db:migrate:local
 pnpm dev
 ```
 
