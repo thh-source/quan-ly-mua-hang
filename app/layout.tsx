@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import SupplierPickerEnhancer from "./SupplierPickerEnhancer";
 import "./globals.css";
-import "./rebuild.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +28,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#14213d",
+  themeColor: "#082f58",
 };
 
 export default function RootLayout({
@@ -40,9 +38,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="vi">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
         {children}
-        <SupplierPickerEnhancer />
       </body>
     </html>
   );
