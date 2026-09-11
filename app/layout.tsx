@@ -4,6 +4,7 @@ import SupplierPickerEnhancer from "./SupplierPickerEnhancer";
 import SupplierPickerLiveList from "./SupplierPickerLiveList";
 import SupplierShortNameColumn from "./SupplierShortNameColumn";
 import SupplierComparisonShortNames from "./SupplierComparisonShortNames";
+import QuoteTableCustomizer from "./QuoteTableCustomizer";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -50,6 +51,7 @@ export default function RootLayout({
         <SupplierPickerLiveList />
         <SupplierShortNameColumn />
         <SupplierComparisonShortNames />
+        <QuoteTableCustomizer />
       </body>
     </html>
   );
