@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import SupplierPickerEnhancer from "./SupplierPickerEnhancer";
 import SupplierPickerLiveList from "./SupplierPickerLiveList";
+import SupplierShortNameColumn from "./SupplierShortNameColumn";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -46,6 +47,7 @@ export default function RootLayout({
         {children}
         <SupplierPickerEnhancer />
         <SupplierPickerLiveList />
+        <SupplierShortNameColumn />
       </body>
     </html>
   );
