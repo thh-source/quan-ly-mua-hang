@@ -1,4 +1,5 @@
 import {getChatGPTUser} from "../../chatgpt-auth";
+import * as XLSX from "xlsx";
 
 async function bindings(){return (await import("cloudflare:workers")).env as any}
 
@@ -22,6 +23,21 @@ function responseText(payload:any){
   .join("")
   .trim();
 }
+
+function excelToText(bytes:ArrayBuffer){
+ const workbook=XLSX.read(new Uint8Array(bytes),{type:"array",cellDates:true});
+ const sections:string[]=[];
+ for(const sheetName of workbook.SheetNames){
+  const sheet=workbook.Sheets[sheetName];
+  if(!sheet)continue;
+  const csv=XLSX.utils.sheet_to_csv(sheet,{blankrows:false});
+  if(csv.trim())sections.push(`### Sheet: ${sheetName}\n${csv.trim()}`);
+ }
+ const text=sections.join("\n\n");
+ if(!text.trim())throw new Error("File Excel không có dữ liệu để phân tích");
+ return text.length>180000?`${text.slice(0,180000)}\n\n[Đã cắt bớt dữ liệu vì file quá lớn]`:text;
+}
+
 async function uploadGeminiBytes(apiKey:string,name:string,mime:string,bytes:ArrayBuffer){
  const start=await fetch("https://generativelanguage.googleapis.com/upload/v1beta/files",{
   method:"POST",
@@ -35,7 +51,10 @@ async function uploadGeminiBytes(apiKey:string,name:string,mime:string,bytes:Arr
   },
   body:JSON.stringify({file:{display_name:name}}),
  });
- if(!start.ok)throw new Error(`Gemini không khởi tạo được upload (${start.status})`);
+ if(!start.ok){
+  const detail=await start.text().catch(()=>"");
+  throw new Error(detail||`Gemini không khởi tạo được upload (${start.status})`);
+ }
  const uploadUrl=start.headers.get("x-goog-upload-url");
  if(!uploadUrl)throw new Error("Gemini không trả về URL upload");
  const uploadedRes=await fetch(uploadUrl,{
@@ -75,8 +94,8 @@ async function readChunkedFile(env:any,userId:string,uploadId:string,chunkCount:
   const key=`ai-pr-temp/${userId}/${uploadId}/${i}`;
   const obj=await env.BUCKET.get(key);
   if(!obj)throw new Error(`Thiếu phần file số ${i+1}`);
-  const bytes=new Uint8Array(await obj.arrayBuffer());
-  parts.push(bytes);total+=bytes.byteLength;
+  const partBytes=new Uint8Array(await obj.arrayBuffer());
+  parts.push(partBytes);total+=partBytes.byteLength;
  }
  if(total!==fileSize)throw new Error("File upload chưa đầy đủ, vui lòng thử lại");
  const merged=new Uint8Array(total);
@@ -119,8 +138,6 @@ export async function POST(request:Request){
    fileName=file.name;providedMime=file.type;bytes=await file.arrayBuffer();
   }
 
-  const mime=mimeTypeFromName(fileName,providedMime);
-  const uploaded=await uploadGeminiBytes(apiKey,fileName,mime,bytes);
   const schema={
    type:"object",
    properties:{
@@ -140,14 +157,25 @@ export async function POST(request:Request){
    },
    required:["number","date","department","purpose","overallConfidence","warnings","items"]
   };
-  const prompt=`Bạn là trợ lý mua hàng. Hãy đọc file người dùng cung cấp (có thể là scan PDF/ảnh, Word tự do hoặc Excel không đúng mẫu) và chuyển thành bản nháp PR chuẩn cho hệ thống mua hàng.\n\nQuy tắc:\n- Không bịa dữ liệu. Trường không chắc thì để trống hoặc 0 và ghi cảnh báo.\n- Nhận biết các cách gọi tương đương: SL/Qty/Khối lượng => qty; ĐVT/Unit => unit; mô tả/spec/quy cách phải tách hợp lý.\n- Nếu file chứa nhiều bảng hoặc nhiều trang, hợp nhất các dòng hàng hóa liên quan.\n- Giữ nguyên tên hàng và thông số quan trọng theo tài liệu gốc, nhưng chuẩn hóa khoảng trắng và cách viết.\n- Ngày trả về YYYY-MM-DD nếu xác định được.\n- confidence từ 0 đến 1 phản ánh độ chắc chắn.\n- Không tự tạo mã hàng giả. Nếu không thấy mã hàng thì code để trống.\n- estimate chỉ điền khi tài liệu thực sự có đơn giá/giá dự kiến.\n- purpose và department chỉ suy ra khi có căn cứ rõ ràng; nếu không để trống.\n- Trả đúng JSON theo schema, không thêm giải thích ngoài JSON.`;
+  const prompt=`Bạn là trợ lý mua hàng. Hãy đọc nội dung người dùng cung cấp (có thể là scan PDF/ảnh hoặc dữ liệu trích từ Word/Excel không đúng mẫu) và chuyển thành bản nháp PR chuẩn cho hệ thống mua hàng.\n\nQuy tắc:\n- Không bịa dữ liệu. Trường không chắc thì để trống hoặc 0 và ghi cảnh báo.\n- Nhận biết các cách gọi tương đương: SL/Qty/Khối lượng => qty; ĐVT/Unit => unit; mô tả/spec/quy cách phải tách hợp lý.\n- Nếu tài liệu chứa nhiều bảng hoặc nhiều trang, hợp nhất các dòng hàng hóa liên quan.\n- Giữ nguyên tên hàng và thông số quan trọng theo tài liệu gốc, nhưng chuẩn hóa khoảng trắng và cách viết.\n- Ngày trả về YYYY-MM-DD nếu xác định được.\n- confidence từ 0 đến 1 phản ánh độ chắc chắn.\n- Không tự tạo mã hàng giả. Nếu không thấy mã hàng thì code để trống.\n- estimate chỉ điền khi tài liệu thực sự có đơn giá/giá dự kiến.\n- purpose và department chỉ suy ra khi có căn cứ rõ ràng; nếu không để trống.\n- Trả đúng JSON theo schema, không thêm giải thích ngoài JSON.`;
+
+  const ext=extension(fileName);
+  let parts:any[];
+  if(ext==="xlsx"||ext==="xls"){
+   const excelText=excelToText(bytes);
+   parts=[{text:`${prompt}\n\nTên file: ${fileName}\n\nDỮ LIỆU EXCEL ĐÃ TRÍCH XUẤT:\n${excelText}`}];
+  }else{
+   const mime=mimeTypeFromName(fileName,providedMime);
+   const uploaded=await uploadGeminiBytes(apiKey,fileName,mime,bytes);
+   parts=[{file_data:{mime_type:uploaded.mime,file_uri:uploaded.uri}},{text:prompt}];
+  }
 
   const model=String(env.GEMINI_PR_MODEL||"gemini-3.7-flash");
   const aiRes=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
    method:"POST",
    headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},
    body:JSON.stringify({
-    contents:[{role:"user",parts:[{file_data:{mime_type:uploaded.mime,file_uri:uploaded.uri}},{text:prompt}]}],
+    contents:[{role:"user",parts}],
     generationConfig:{temperature:0.1,responseMimeType:"application/json",responseSchema:schema},
    }),
   });
