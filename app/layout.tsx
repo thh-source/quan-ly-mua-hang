@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import SupplierPickerEnhancer from "./SupplierPickerEnhancer";
 import "./globals.css";
 import "./rebuild.css";
 
@@ -41,6 +42,7 @@ export default function RootLayout({
     <html lang="vi">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
+        <SupplierPickerEnhancer />
       </body>
     </html>
   );
