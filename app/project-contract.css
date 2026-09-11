@@ -1,0 +1,4 @@
+/* SCMH rebuild: hide legacy Project Contract navigation tab without touching main. */
+aside nav > button:nth-child(6) {
+  display: none;
+}
