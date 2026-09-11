@@ -1,0 +1,25 @@
+{
+  "name": "@scmh/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "wrangler deploy --dry-run --config wrangler.toml",
+    "typecheck": "tsc --noEmit",
+    "db:migrate:local": "wrangler d1 migrations apply mua-hang-db --local --config wrangler.toml",
+    "db:migrate:remote": "wrangler d1 migrations apply mua-hang-db --remote --config wrangler.toml",
+    "deploy": "wrangler deploy --config wrangler.toml"
+  },
+  "dependencies": {
+    "@scmh/database": "workspace:*",
+    "@scmh/shared": "workspace:*",
+    "drizzle-orm": "^0.44.5",
+    "hono": "^4.9.6"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250906.0",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.33.1"
+  }
+}
