@@ -16,6 +16,14 @@ type TestResult = {
   message?: string;
 };
 
+type ProviderHealthResult = {
+  ok?: boolean;
+  code?: string;
+  message?: string;
+  configured?: Record<string, boolean | string>;
+  health?: { ok?: boolean; provider?: string; model?: string; message?: string };
+};
+
 const CHUNK_SIZE = 384 * 1024;
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
@@ -43,6 +51,26 @@ export default function AiV2DocumentTest() {
   const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<TestResult | null>(null);
   const [error, setError] = useState("");
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [providerHealth, setProviderHealth] = useState<ProviderHealthResult | null>(null);
+
+  const runProviderHealth = async () => {
+    if (providerBusy) return;
+    setProviderBusy(true);
+    setProviderHealth(null);
+    try {
+      const response = await fetch("/api/ai-v2/health", { cache: "no-store" });
+      const text = await response.text();
+      let data: ProviderHealthResult = {};
+      try { data = text ? JSON.parse(text) : {}; } catch {}
+      if (!data.message && !data.health?.message && text && !data.ok) data.message = text;
+      setProviderHealth(data);
+    } catch (cause) {
+      setProviderHealth({ ok: false, code: "NETWORK_ERROR", message: cause instanceof Error ? cause.message : "Không thể kiểm tra AI provider." });
+    } finally {
+      setProviderBusy(false);
+    }
+  };
 
   const runTest = async () => {
     if (!file || busy) return;
@@ -105,11 +133,27 @@ export default function AiV2DocumentTest() {
         <header>
           <div>
             <span>AI V2 · DOCUMENT PIPELINE</span>
-            <h2>Kiểm tra parser tài liệu</h2>
-            <p>Chỉ đọc và phân tích file. Không gọi AI, không ghi D1, không tạo PR.</p>
+            <h2>Kiểm tra AI v2</h2>
+            <p>Parser tài liệu và kết nối AI provider được kiểm tra độc lập trước khi bật tạo PR bằng AI.</p>
           </div>
           <button type="button" className="ai-v2-test-close" onClick={() => !busy && setOpen(false)}>×</button>
         </header>
+
+        <section className="ai-v2-provider-box">
+          <div>
+            <b>AI provider</b>
+            <small>Vertex AI qua Cloudflare AI Gateway</small>
+          </div>
+          <button type="button" className="ghost" onClick={() => void runProviderHealth()} disabled={providerBusy}>
+            {providerBusy ? "Đang kiểm tra..." : "Kiểm tra kết nối AI"}
+          </button>
+        </section>
+
+        {providerHealth && <div className={providerHealth.ok ? "ai-v2-test-ready" : "ai-v2-test-error"}>
+          <strong>{providerHealth.ok ? "✓ AI provider hoạt động" : `✕ ${providerHealth.code || "AI chưa sẵn sàng"}`}</strong>
+          <div>{providerHealth.health?.message || providerHealth.message || "Không có chi tiết."}</div>
+          {providerHealth.configured && <pre className="ai-v2-provider-config">{JSON.stringify(providerHealth.configured, null, 2)}</pre>}
+        </div>}
 
         <input
           ref={inputRef}
