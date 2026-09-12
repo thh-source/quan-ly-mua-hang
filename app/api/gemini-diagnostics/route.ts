@@ -1,5 +1,3 @@
-import {getChatGPTUser} from "../../chatgpt-auth";
-
 type Step = {
   step: string;
   status: "ok" | "error" | "skipped";
@@ -15,9 +13,6 @@ const json = (body: unknown, status = 200) => Response.json(body, {
 });
 
 export async function GET() {
-  const user = await getChatGPTUser();
-  if (!user) return json({ status: "error", error: "UNAUTHORIZED" }, 401);
-
   let env: {
     GEMINI_API_KEY?: string;
     GEMINI_PR_MODEL?: string;
@@ -44,6 +39,7 @@ export async function GET() {
       for (const secret of [key, encodeURIComponent(key)]) text = text.split(secret).join("[REDACTED]");
     }
     if (accountId) text = text.split(accountId).join("[ACCOUNT_ID]");
+    if (gatewayId) text = text.split(gatewayId).join("[GATEWAY_ID]");
     return text.replace(/AIza[\w-]+/g, "[REDACTED]").replace(/\s+/g, " ").slice(0, 420);
   };
   const model = String(env.GEMINI_PR_MODEL || "").trim().replace(/^models\//, "") || "gemini-2.5-flash";
@@ -59,7 +55,7 @@ export async function GET() {
     httpCode: null,
     error: gatewayConfigured ? null : "MISSING_GATEWAY_CONFIG",
     message: gatewayConfigured
-      ? `AI Gateway đã cấu hình: ${gatewayId}.`
+      ? "AI Gateway đã được cấu hình."
       : "Thiếu CLOUDFLARE_ACCOUNT_ID hoặc CF_AI_GATEWAY_ID.",
   }];
 
@@ -151,7 +147,7 @@ export async function GET() {
   return json({
     status: relevant.every(step => step.status === "ok" || step.status === "skipped") && byStep.gateway_generate_content?.status === "ok" ? "ok" : "error",
     model: clean(model),
-    gateway: { configured: gatewayConfigured, id: gatewayConfigured ? gatewayId : null },
+    gateway: { configured: gatewayConfigured },
     steps,
     hints: [...hints],
   });
