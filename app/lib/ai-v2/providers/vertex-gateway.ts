@@ -31,8 +31,8 @@ export function getVertexGatewayConfig(env: VertexGatewayEnv): VertexConfig {
     gatewayId: required(env.CF_AI_GATEWAY_ID, "CF_AI_GATEWAY_ID"),
     gatewayToken: required(env.CF_AI_GATEWAY_TOKEN, "CF_AI_GATEWAY_TOKEN"),
     projectId: required(env.GCP_PROJECT_ID, "GCP_PROJECT_ID"),
-    location: String(env.VERTEX_AI_LOCATION || "asia-southeast1").trim() || "asia-southeast1",
-    model: String(env.VERTEX_AI_MODEL || "gemini-2.5-flash").trim() || "gemini-2.5-flash",
+    location: String(env.VERTEX_AI_LOCATION || "global").trim() || "global",
+    model: String(env.VERTEX_AI_MODEL || "gemini-3.5-flash").trim() || "gemini-3.5-flash",
   };
 }
 
