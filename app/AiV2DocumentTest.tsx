@@ -16,10 +16,23 @@ type TestResult = {
   message?: string;
 };
 
+const CHUNK_SIZE = 384 * 1024;
+const MAX_FILE_SIZE = 20 * 1024 * 1024;
+
 function formatBytes(value = 0) {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
   return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+async function parseJson(response: Response) {
+  const text = await response.text();
+  let data: TestResult = {};
+  try { data = text ? JSON.parse(text) : {}; } catch {}
+  if (!response.ok || !data.ok) {
+    throw new Error(data.message || data.error || text || `Lỗi máy chủ (${response.status})`);
+  }
+  return data;
 }
 
 export default function AiV2DocumentTest() {
@@ -27,25 +40,54 @@ export default function AiV2DocumentTest() {
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [result, setResult] = useState<TestResult | null>(null);
   const [error, setError] = useState("");
 
   const runTest = async () => {
     if (!file || busy) return;
+    if (file.size > MAX_FILE_SIZE) {
+      setError("File tối đa 20 MB.");
+      return;
+    }
+
     setBusy(true);
+    setProgress(0);
     setError("");
     setResult(null);
     try {
-      const form = new FormData();
-      form.set("file", file);
-      const response = await fetch("/api/ai-v2/document-test", { method: "POST", body: form });
-      const text = await response.text();
-      let data: TestResult = {};
-      try { data = text ? JSON.parse(text) : {}; } catch {}
-      if (!response.ok || !data.ok) {
-        throw new Error(data.message || data.error || text || `Lỗi máy chủ (${response.status})`);
+      const uploadId = crypto.randomUUID();
+      const chunkCount = Math.ceil(file.size / CHUNK_SIZE);
+
+      for (let index = 0; index < chunkCount; index++) {
+        const chunk = file.slice(index * CHUNK_SIZE, Math.min(file.size, (index + 1) * CHUNK_SIZE));
+        const response = await fetch(`/api/ai-v2/upload-chunk?uploadId=${encodeURIComponent(uploadId)}&index=${index}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: chunk,
+        });
+        const text = await response.text();
+        let data: { ok?: boolean; error?: string } = {};
+        try { data = text ? JSON.parse(text) : {}; } catch {}
+        if (!response.ok || !data.ok) throw new Error(data.error || text || `Lỗi upload (${response.status})`);
+        setProgress(Math.round(((index + 1) / chunkCount) * 80));
       }
+
+      const response = await fetch("/api/ai-v2/document-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          uploadId,
+          chunkCount,
+          fileName: file.name,
+          fileSize: file.size,
+          mimeType: file.type || "application/octet-stream",
+        }),
+      });
+      setProgress(90);
+      const data = await parseJson(response);
       setResult(data);
+      setProgress(100);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Không thể kiểm tra tài liệu.");
     } finally {
@@ -75,9 +117,11 @@ export default function AiV2DocumentTest() {
           type="file"
           accept=".xlsx,.xls,.docx,.pdf,.png,.jpg,.jpeg,.webp"
           onChange={(event) => {
-            setFile(event.target.files?.[0] || null);
+            const next = event.target.files?.[0] || null;
+            setFile(next);
             setResult(null);
-            setError("");
+            setProgress(0);
+            setError(next && next.size > MAX_FILE_SIZE ? "File tối đa 20 MB." : "");
           }}
         />
 
@@ -88,8 +132,8 @@ export default function AiV2DocumentTest() {
 
         <div className="ai-v2-test-actions">
           <button type="button" className="ghost" onClick={() => setOpen(false)} disabled={busy}>Đóng</button>
-          <button type="button" className="primary" onClick={() => void runTest()} disabled={!file || busy}>
-            {busy ? "Đang kiểm tra..." : "Kiểm tra parser"}
+          <button type="button" className="primary" onClick={() => void runTest()} disabled={!file || busy || file.size > MAX_FILE_SIZE}>
+            {busy ? `Đang kiểm tra... ${progress}%` : "Kiểm tra parser"}
           </button>
         </div>
 
