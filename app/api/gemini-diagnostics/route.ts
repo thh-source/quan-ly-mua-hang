@@ -18,6 +18,7 @@ export async function GET() {
     GEMINI_PR_MODEL?: string;
     CLOUDFLARE_ACCOUNT_ID?: string;
     CF_AI_GATEWAY_ID?: string;
+    CF_AI_GATEWAY_TOKEN?: string;
   };
   try {
     env = (await import("cloudflare:workers")).env as unknown as typeof env;
@@ -28,20 +29,25 @@ export async function GET() {
   const key = String(env.GEMINI_API_KEY || "").trim();
   const accountId = String(env.CLOUDFLARE_ACCOUNT_ID || "").trim();
   const gatewayId = String(env.CF_AI_GATEWAY_ID || "").trim();
+  const gatewayToken = String(env.CF_AI_GATEWAY_TOKEN || "").trim();
   const gatewayConfigured = Boolean(accountId && gatewayId);
+  const gatewayAuthConfigured = Boolean(gatewayToken);
   const gatewayBase = gatewayConfigured
     ? `https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(accountId)}/${encodeURIComponent(gatewayId)}/google-ai-studio/v1beta`
     : "";
 
   const clean = (value: string) => {
     let text = value;
-    if (key) {
-      for (const secret of [key, encodeURIComponent(key)]) text = text.split(secret).join("[REDACTED]");
+    for (const secret of [key, gatewayToken].filter(Boolean)) {
+      for (const candidate of [secret, encodeURIComponent(secret)]) {
+        text = text.split(candidate).join("[REDACTED]");
+      }
     }
     if (accountId) text = text.split(accountId).join("[ACCOUNT_ID]");
     if (gatewayId) text = text.split(gatewayId).join("[GATEWAY_ID]");
     return text.replace(/AIza[\w-]+/g, "[REDACTED]").replace(/\s+/g, " ").slice(0, 420);
   };
+
   const model = String(env.GEMINI_PR_MODEL || "").trim().replace(/^models\//, "") || "gemini-2.5-flash";
   const steps: Step[] = [{
     step: "api_key",
@@ -54,9 +60,13 @@ export async function GET() {
     status: gatewayConfigured ? "ok" : "error",
     httpCode: null,
     error: gatewayConfigured ? null : "MISSING_GATEWAY_CONFIG",
-    message: gatewayConfigured
-      ? "AI Gateway đã được cấu hình."
-      : "Thiếu CLOUDFLARE_ACCOUNT_ID hoặc CF_AI_GATEWAY_ID.",
+    message: gatewayConfigured ? "AI Gateway đã được cấu hình." : "Thiếu CLOUDFLARE_ACCOUNT_ID hoặc CF_AI_GATEWAY_ID.",
+  }, {
+    step: "gateway_token",
+    status: gatewayAuthConfigured ? "ok" : "error",
+    httpCode: null,
+    error: gatewayAuthConfigured ? null : "MISSING_GATEWAY_TOKEN",
+    message: gatewayAuthConfigured ? "AI Gateway token đã được cấu hình." : "Thiếu CF_AI_GATEWAY_TOKEN.",
   }];
 
   async function probe(step: string, url: string, options: RequestInit = {}): Promise<Step> {
@@ -70,8 +80,8 @@ export async function GET() {
       try { payload = raw ? JSON.parse(raw) : null; } catch {}
 
       if (!response.ok) {
-        const errStatus = payload?.error?.status || payload?.errors?.[0]?.code || `HTTP_${httpCode}`;
-        const errMessage = payload?.error?.message || payload?.errors?.[0]?.message || raw || `HTTP ${httpCode}.`;
+        const errStatus = payload?.error?.status || payload?.errors?.[0]?.code || payload?.error?.[0]?.code || `HTTP_${httpCode}`;
+        const errMessage = payload?.error?.message || payload?.errors?.[0]?.message || payload?.error?.[0]?.message || raw || `HTTP ${httpCode}.`;
         return { step, status: "error", httpCode, error: clean(String(errStatus)), message: clean(String(errMessage)) };
       }
 
@@ -98,14 +108,22 @@ export async function GET() {
     }
   }
 
-  const authHeaders = key ? { "x-goog-api-key": key } : {};
-  const generateOptions: RequestInit = {
+  const geminiHeaders = key ? { "x-goog-api-key": key } : {};
+  const gatewayHeaders = {
+    ...geminiHeaders,
+    ...(gatewayToken ? { "cf-aig-authorization": `Bearer ${gatewayToken}` } : {}),
+  };
+  const directGenerateOptions: RequestInit = {
     method: "POST",
-    headers: { ...authHeaders, "Content-Type": "application/json" },
+    headers: { ...geminiHeaders, "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ parts: [{ text: "Reply only OK." }] }],
       generationConfig: { maxOutputTokens: 32, temperature: 0 },
     }),
+  };
+  const gatewayGenerateOptions: RequestInit = {
+    ...directGenerateOptions,
+    headers: { ...gatewayHeaders, "Content-Type": "application/json" },
   };
 
   steps.push(await probe("google_connectivity", "https://www.google.com/generate_204"));
@@ -114,40 +132,35 @@ export async function GET() {
     for (const step of ["direct_models", "direct_generate_content", "gateway_models", "gateway_generate_content"])
       steps.push({ step, status: "skipped", httpCode: null, error: null, message: "Bỏ qua vì thiếu API key." });
   } else {
-    steps.push(await probe("direct_models", `${DIRECT_BASE}/models`, { headers: authHeaders }));
-    steps.push(await probe("direct_generate_content", `${DIRECT_BASE}/models/${encodeURIComponent(model)}:generateContent`, generateOptions));
+    steps.push(await probe("direct_models", `${DIRECT_BASE}/models`, { headers: geminiHeaders }));
+    steps.push(await probe("direct_generate_content", `${DIRECT_BASE}/models/${encodeURIComponent(model)}:generateContent`, directGenerateOptions));
 
-    if (gatewayConfigured) {
-      steps.push(await probe("gateway_models", `${gatewayBase}/models`, { headers: authHeaders }));
-      steps.push(await probe("gateway_generate_content", `${gatewayBase}/models/${encodeURIComponent(model)}:generateContent`, generateOptions));
+    if (gatewayConfigured && gatewayAuthConfigured) {
+      steps.push(await probe("gateway_models", `${gatewayBase}/models`, { headers: gatewayHeaders }));
+      steps.push(await probe("gateway_generate_content", `${gatewayBase}/models/${encodeURIComponent(model)}:generateContent`, gatewayGenerateOptions));
     } else {
       for (const step of ["gateway_models", "gateway_generate_content"])
-        steps.push({ step, status: "skipped", httpCode: null, error: null, message: "Bỏ qua vì chưa cấu hình AI Gateway." });
+        steps.push({ step, status: "skipped", httpCode: null, error: null, message: gatewayConfigured ? "Bỏ qua vì thiếu CF_AI_GATEWAY_TOKEN." : "Bỏ qua vì chưa cấu hình AI Gateway." });
     }
   }
 
   const hints = new Set<string>();
   const byStep = Object.fromEntries(steps.map(step => [step.step, step]));
-  if (!gatewayConfigured) hints.add("Tạo AI Gateway rồi thêm CLOUDFLARE_ACCOUNT_ID và CF_AI_GATEWAY_ID vào Runtime variables để test đường Gateway.");
-  if (byStep.google_connectivity?.status === "error") hints.add("Worker không ra được HTTPS bình thường; kiểm tra egress trước khi kết luận lỗi Gemini.");
+  if (!gatewayConfigured) hints.add("Tạo AI Gateway rồi thêm CLOUDFLARE_ACCOUNT_ID và CF_AI_GATEWAY_ID vào Runtime variables.");
+  if (gatewayConfigured && !gatewayAuthConfigured) hints.add("Thêm CF_AI_GATEWAY_TOKEN dạng Secret để xác thực AI Gateway.");
   if (byStep.direct_generate_content?.message?.toLowerCase().includes("location") && byStep.gateway_generate_content?.status === "ok")
-    hints.add("AI Gateway đã tránh được lỗi location của đường gọi trực tiếp. Có thể chuyển AI Import PR sang Gateway.");
+    hints.add("AI Gateway đã tránh được lỗi location của đường gọi trực tiếp. Có thể dùng Gateway cho AI Import PR.");
   if (byStep.direct_generate_content?.message?.toLowerCase().includes("location") && byStep.gateway_generate_content?.message?.toLowerCase().includes("location"))
-    hints.add("Cả direct và AI Gateway đều bị Google từ chối location; khi đó cần đổi sang relay/Vertex AI ở region cố định.");
-  for (const step of steps.filter(item => item.status === "error")) {
-    const message = `${step.error} ${step.message}`.toLowerCase();
-    if (step.error === "MISSING_API_KEY") hints.add("Cấu hình GEMINI_API_KEY trong Worker rồi thử lại.");
-    else if (/api.?key|unauthenticated/.test(message) || step.httpCode === 401) hints.add("Kiểm tra API key, project và restriction của key.");
-    else if (step.httpCode === 403) hints.add("Kiểm tra quyền API, restriction và chính sách project.");
-    else if (step.httpCode === 404 || /model/.test(message)) hints.add("Kiểm tra GEMINI_PR_MODEL; model mặc định chẩn đoán là gemini-2.5-flash.");
-    else if (step.httpCode === 429) hints.add("Kiểm tra quota/rate limit Free Tier.");
-  }
+    hints.add("Cả direct và AI Gateway đều bị Google từ chối location; khi đó cần relay/Vertex AI ở region cố định.");
+  if (byStep.gateway_generate_content?.httpCode === 401)
+    hints.add("AI Gateway vẫn từ chối xác thực; kiểm tra CF_AI_GATEWAY_TOKEN và quyền AI Gateway: Run.");
+  if (byStep.gateway_generate_content?.httpCode === 403)
+    hints.add("AI Gateway nhận token nhưng token có thể thiếu quyền hoặc bị giới hạn resource.");
 
-  const relevant = steps.filter(step => !["direct_models", "direct_generate_content"].includes(step.step));
   return json({
-    status: relevant.every(step => step.status === "ok" || step.status === "skipped") && byStep.gateway_generate_content?.status === "ok" ? "ok" : "error",
+    status: byStep.gateway_generate_content?.status === "ok" ? "ok" : "error",
     model: clean(model),
-    gateway: { configured: gatewayConfigured },
+    gateway: { configured: gatewayConfigured, authenticated: gatewayAuthConfigured },
     steps,
     hints: [...hints],
   });
