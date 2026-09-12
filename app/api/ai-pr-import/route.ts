@@ -28,10 +28,12 @@ function responseText(payload:any){
 function gatewayConfig(env:any){
  const accountId=String(env.CLOUDFLARE_ACCOUNT_ID||"").trim();
  const gatewayId=String(env.CF_AI_GATEWAY_ID||"").trim();
- if(!accountId||!gatewayId)return null;
+ const token=String(env.CF_AI_GATEWAY_TOKEN||"").trim();
+ if(!accountId||!gatewayId||!token)return null;
  return {
   accountId,
   gatewayId,
+  token,
   base:`https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(accountId)}/${encodeURIComponent(gatewayId)}/google-ai-studio/v1beta`,
  };
 }
@@ -194,9 +196,12 @@ export async function POST(request:Request){
 
   const model=String(env.GEMINI_PR_MODEL||"gemini-2.5-flash").replace(/^models\//,"");
   const base=gateway?.base||"https://generativelanguage.googleapis.com/v1beta";
+  const headers:Record<string,string>={"x-goog-api-key":apiKey,"Content-Type":"application/json"};
+  if(gateway)headers["cf-aig-authorization"]=`Bearer ${gateway.token}`;
+
   const aiRes=await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`,{
    method:"POST",
-   headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},
+   headers,
    body:JSON.stringify({
     contents:[{role:"user",parts}],
     generationConfig:{temperature:0.1,responseMimeType:"application/json",responseSchema:schema},
@@ -206,9 +211,10 @@ export async function POST(request:Request){
   let ai:any={};try{ai=raw?JSON.parse(raw):{}}catch{}
   if(!aiRes.ok){
    console.error("GEMINI_PR_RESPONSE_ERROR",raw);
+   if(aiRes.status===401&&gateway)return Response.json({error:"AI Gateway từ chối token. Kiểm tra CF_AI_GATEWAY_TOKEN và quyền AI Gateway: Run."},{status:401});
    if(aiRes.status===429)return Response.json({error:"Gemini đã hết hạn mức tạm thời. Hãy chờ rồi thử lại hoặc kiểm tra quota của project."},{status:429});
-   if(aiRes.status===403)return Response.json({error:"Gemini API chưa được cấp quyền cho project/API key này. Kiểm tra API key, project và hạn mức Free Tier."},{status:403});
-   return Response.json({error:ai?.error?.message||raw||"Gemini chưa phân tích được file này"},{status:502});
+   if(aiRes.status===403)return Response.json({error:"Gemini/AI Gateway chưa được cấp quyền phù hợp. Kiểm tra API key, gateway token và quyền Run."},{status:403});
+   return Response.json({error:ai?.error?.message||ai?.message||raw||"Gemini chưa phân tích được file này"},{status:502});
   }
   const text=responseText(ai);
   if(!text)return Response.json({error:"Gemini không trả về dữ liệu PR"},{status:502});
