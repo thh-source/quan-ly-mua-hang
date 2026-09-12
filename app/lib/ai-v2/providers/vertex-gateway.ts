@@ -1,6 +1,8 @@
 import { AiServiceError, type AiProvider, type AiProviderRequest, type AiProviderResult } from "../contracts";
 import { prDraftJsonSchema } from "../pr-draft";
 
+const VERTEX_INLINE_IMAGE_MAX_BYTES = 7 * 1024 * 1024;
+
 export type VertexGatewayEnv = {
   CLOUDFLARE_ACCOUNT_ID?: string;
   CF_AI_GATEWAY_ID?: string;
@@ -123,6 +125,9 @@ export class VertexGatewayProvider implements AiProvider {
     if (request.document.extractedText?.trim()) {
       parts.push({ text: `\n\nNỘI DUNG TÀI LIỆU:\n${request.document.extractedText}` });
     } else if (request.document.bytes?.byteLength) {
+      if (request.document.kind === "image" && request.document.bytes.byteLength > VERTEX_INLINE_IMAGE_MAX_BYTES) {
+        throw new AiServiceError("DOCUMENT_TOO_LARGE", "Ảnh vượt quá giới hạn 7 MB của Vertex AI inline input.");
+      }
       parts.push({
         inlineData: {
           mimeType: request.document.mimeType,
