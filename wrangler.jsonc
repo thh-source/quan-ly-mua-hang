@@ -6,7 +6,10 @@
   "compatibility_flags": ["nodejs_compat"],
   "keep_vars": true,
   "vars": {
-    "MASTER_ADMIN_ID": "bosmile"
+    "MASTER_ADMIN_ID": "bosmile",
+    "CF_AI_GATEWAY_ID": "gemini-gateway",
+    "VERTEX_AI_LOCATION": "global",
+    "VERTEX_AI_MODEL": "gemini-3.5-flash"
   },
   "d1_databases": [
     {
