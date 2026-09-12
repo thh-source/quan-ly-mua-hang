@@ -1,4 +1,4 @@
-import { requireUser } from "../../auth";
+import {getChatGPTUser} from "../../chatgpt-auth";
 
 type Step = {
   step: string;
@@ -15,12 +15,8 @@ const json = (body: unknown, status = 200) => Response.json(body, {
 });
 
 export async function GET() {
-  try {
-    await requireUser();
-  } catch (error) {
-    const unauthorized = error instanceof Error && error.message === "UNAUTHORIZED";
-    return json({ status: "error", error: unauthorized ? "UNAUTHORIZED" : "AUTH_UNAVAILABLE" }, unauthorized ? 401 : 503);
-  }
+  const user = await getChatGPTUser();
+  if (!user) return json({ status: "error", error: "UNAUTHORIZED" }, 401);
 
   let env: {
     GEMINI_API_KEY?: string;
