@@ -22,8 +22,8 @@ export async function GET() {
     CF_AI_GATEWAY_ID: Boolean(String(env.CF_AI_GATEWAY_ID || "").trim()),
     CF_AI_GATEWAY_TOKEN: Boolean(String(env.CF_AI_GATEWAY_TOKEN || "").trim()),
     GCP_PROJECT_ID: Boolean(String(env.GCP_PROJECT_ID || "").trim()),
-    VERTEX_AI_LOCATION: String(env.VERTEX_AI_LOCATION || "asia-southeast1").trim() || "asia-southeast1",
-    VERTEX_AI_MODEL: String(env.VERTEX_AI_MODEL || "gemini-2.5-flash").trim() || "gemini-2.5-flash",
+    VERTEX_AI_LOCATION: String(env.VERTEX_AI_LOCATION || "global").trim() || "global",
+    VERTEX_AI_MODEL: String(env.VERTEX_AI_MODEL || "gemini-3.5-flash").trim() || "gemini-3.5-flash",
   };
 
   try {
