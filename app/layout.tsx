@@ -6,7 +6,6 @@ import SupplierShortNameColumn from "./SupplierShortNameColumn";
 import SupplierComparisonShortNames from "./SupplierComparisonShortNames";
 import QuoteTableCustomizer from "./QuoteTableCustomizer";
 import SupplierHistoryPopup from "./SupplierHistoryPopup";
-import AIPrImporter from "./AIPrImporter";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -55,7 +54,6 @@ export default function RootLayout({
         <SupplierComparisonShortNames />
         <QuoteTableCustomizer />
         <SupplierHistoryPopup />
-        <AIPrImporter />
       </body>
     </html>
   );
