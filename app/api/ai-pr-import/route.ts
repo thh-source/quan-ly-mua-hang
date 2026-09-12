@@ -1,9 +1,11 @@
 import {getChatGPTUser} from "../../chatgpt-auth";
 import * as XLSX from "xlsx";
+import {Buffer} from "node:buffer";
 
 async function bindings(){return (await import("cloudflare:workers")).env as any}
 
 const MAX_FILE_SIZE=20*1024*1024;
+const GATEWAY_INLINE_MAX=14*1024*1024;
 const ALLOWED_EXTENSIONS=new Set(["pdf","png","jpg","jpeg","webp","docx","xlsx","xls"]);
 
 function extension(name:string){return name.split(".").pop()?.toLowerCase()||""}
@@ -22,6 +24,16 @@ function responseText(payload:any){
   .map((part:any)=>typeof part?.text==="string"?part.text:"")
   .join("")
   .trim();
+}
+function gatewayConfig(env:any){
+ const accountId=String(env.CLOUDFLARE_ACCOUNT_ID||"").trim();
+ const gatewayId=String(env.CF_AI_GATEWAY_ID||"").trim();
+ if(!accountId||!gatewayId)return null;
+ return {
+  accountId,
+  gatewayId,
+  base:`https://gateway.ai.cloudflare.com/v1/${encodeURIComponent(accountId)}/${encodeURIComponent(gatewayId)}/google-ai-studio/v1beta`,
+ };
 }
 
 function excelToText(bytes:ArrayBuffer){
@@ -117,6 +129,7 @@ export async function POST(request:Request){
   const env=await bindings();
   const apiKey=String(env.GEMINI_API_KEY||"").trim();
   if(!apiKey)return Response.json({error:"Chưa cấu hình GEMINI_API_KEY trên Cloudflare Worker"},{status:503});
+  const gateway=gatewayConfig(env);
 
   let fileName="",providedMime="",bytes:ArrayBuffer;
   const contentType=request.headers.get("content-type")||"";
@@ -164,14 +177,24 @@ export async function POST(request:Request){
   if(ext==="xlsx"||ext==="xls"){
    const excelText=excelToText(bytes);
    parts=[{text:`${prompt}\n\nTên file: ${fileName}\n\nDỮ LIỆU EXCEL ĐÃ TRÍCH XUẤT:\n${excelText}`}];
+  }else if(gateway && ["pdf","png","jpg","jpeg","webp"].includes(ext)){
+   if(bytes.byteLength>GATEWAY_INLINE_MAX){
+    return Response.json({error:"PDF/ảnh qua AI Gateway hiện giới hạn 14 MB. Hãy giảm kích thước file rồi thử lại."},{status:413});
+   }
+   const mime=mimeTypeFromName(fileName,providedMime);
+   parts=[
+    {inline_data:{mime_type:mime,data:Buffer.from(bytes).toString("base64")}},
+    {text:prompt},
+   ];
   }else{
    const mime=mimeTypeFromName(fileName,providedMime);
    const uploaded=await uploadGeminiBytes(apiKey,fileName,mime,bytes);
    parts=[{file_data:{mime_type:uploaded.mime,file_uri:uploaded.uri}},{text:prompt}];
   }
 
-  const model=String(env.GEMINI_PR_MODEL||"gemini-3.7-flash");
-  const aiRes=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{
+  const model=String(env.GEMINI_PR_MODEL||"gemini-2.5-flash").replace(/^models\//,"");
+  const base=gateway?.base||"https://generativelanguage.googleapis.com/v1beta";
+  const aiRes=await fetch(`${base}/models/${encodeURIComponent(model)}:generateContent`,{
    method:"POST",
    headers:{"x-goog-api-key":apiKey,"Content-Type":"application/json"},
    body:JSON.stringify({
@@ -191,7 +214,7 @@ export async function POST(request:Request){
   if(!text)return Response.json({error:"Gemini không trả về dữ liệu PR"},{status:502});
   let draft:any;
   try{draft=JSON.parse(text)}catch{console.error("GEMINI_PR_JSON_ERROR",text);return Response.json({error:"Kết quả Gemini không đúng định dạng JSON"},{status:502})}
-  return Response.json({ok:true,draft,model,provider:"gemini",fileName});
+  return Response.json({ok:true,draft,model,provider:"gemini",via:gateway?"cloudflare-ai-gateway":"direct",fileName});
  }catch(error){
   console.error("GEMINI_PR_IMPORT_ERROR",error);
   return Response.json({error:error instanceof Error?error.message:"Không thể phân tích file"},{status:500});
