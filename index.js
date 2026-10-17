@@ -42862,6 +42862,20 @@ var worker_entry_default = { async fetch(request, env, ctx) {
 			})).response();
 		}
 	}, [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES]);
+	if (new URL(request.url).pathname.startsWith("/assets/")) {
+		const assetResponse = await env.ASSETS.fetch(request);
+		if (assetResponse && assetResponse.ok) {
+			const newHeaders = new Headers(assetResponse.headers);
+			newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+			newHeaders.set("Pragma", "no-cache");
+			newHeaders.set("Expires", "0");
+			return new Response(assetResponse.body, {
+				status: assetResponse.status,
+				statusText: assetResponse.statusText,
+				headers: newHeaders
+			});
+		}
+	}
 	return app_router_entry_default.fetch(request, env, ctx);
 } };
 //#endregion

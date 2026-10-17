@@ -41,6 +41,21 @@ const worker = {
       }, allowedWidths);
     }
 
+    if (url.pathname.startsWith("/assets/")) {
+      const assetResponse = await env.ASSETS.fetch(request);
+      if (assetResponse && assetResponse.ok) {
+        const newHeaders = new Headers(assetResponse.headers);
+        newHeaders.set("Cache-Control", "no-cache, no-store, must-revalidate");
+        newHeaders.set("Pragma", "no-cache");
+        newHeaders.set("Expires", "0");
+        return new Response(assetResponse.body, {
+          status: assetResponse.status,
+          statusText: assetResponse.statusText,
+          headers: newHeaders,
+        });
+      }
+    }
+
     return handler.fetch(request, env, ctx);
   },
 };
