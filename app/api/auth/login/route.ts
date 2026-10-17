@@ -27,7 +27,7 @@ export async function POST(request: Request) {
         { status: 503 },
       );
     return Response.json(
-      { error: "Lỗi kết nối D1 hoặc cấu hình Worker" },
+      { error: "Lỗi kết nối D1 hoặc cấu hình Worker: " + message },
       { status: 500 },
     );
   }

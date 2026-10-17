@@ -1,4 +1,4 @@
-﻿globalThis.__VINEXT_LAZY_CHUNKS__ = ["assets/LoginForm-BKS5Ecsy.js","assets/ProcurementApp-aYcHHA1x.js","assets/layout-segment-context-B1lxfi0F.js","assets/xlsx-B1VYu86S.js"];
+globalThis.__VINEXT_LAZY_CHUNKS__ = ["assets/LoginForm-BKS5Ecsy.js","assets/ProcurementApp-aYcHHA1x.js","assets/layout-segment-context-B1lxfi0F.js","assets/xlsx-B1VYu86S.js"];
 import { env } from "cloudflare:workers";
 import * as __viteRscAsyncHooks from "node:async_hooks";
 import { AsyncLocalStorage as AsyncLocalStorage$1 } from "node:async_hooks";
@@ -14771,12 +14771,14 @@ var randomHex = (size = 32) => {
 };
 async function ensureAuthSchema() {
 	const { DB } = await runtime();
-	await DB.batch([
-		DB.prepare("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, must_change_password INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
-		DB.prepare("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)"),
-		DB.prepare("CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)"),
-		DB.prepare("CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)")
-	]);
+	try {
+		await DB.prepare("CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, must_change_password INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)").run();
+		await DB.prepare("CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)").run();
+		try { await DB.prepare("CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)").run(); } catch {}
+		try { await DB.prepare("CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)").run(); } catch {}
+	} catch (e) {
+		console.error("ensureAuthSchema error:", e);
+	}
 }
 async function hashPassword(password, saltHex) {
 	const material = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveBits"]), salt = Uint8Array.from(saltHex.match(/.{1,2}/g).map((x) => parseInt(x, 16)));
@@ -36783,7 +36785,7 @@ async function POST$6(request) {
 	} catch (error) {
 		console.error("LOGIN_ERROR", error);
 		if ((error instanceof Error ? error.message : "") === "MASTER_SECRET_MISSING") return Response.json({ error: "Worker chưa nhận MASTER_ADMIN_PASSWORD" }, { status: 503 });
-		return Response.json({ error: "Lỗi kết nối D1 hoặc cấu hình Worker" }, { status: 500 });
+		return Response.json({ error: "Lỗi kết nối D1 hoặc cấu hình Worker: " + (error instanceof Error ? error.message : String(error)) }, { status: 500 });
 	}
 }
 //#endregion

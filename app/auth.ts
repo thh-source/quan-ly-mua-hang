@@ -27,20 +27,26 @@ const randomHex = (size = 32) => {
 
 export async function ensureAuthSchema() {
   const { DB } = await runtime();
-  await DB.batch([
-    DB.prepare(
+  try {
+    await DB.prepare(
       "CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE, display_name TEXT NOT NULL, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, role TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, must_change_password INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
-    ),
-    DB.prepare(
+    ).run();
+    await DB.prepare(
       "CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)",
-    ),
-    DB.prepare(
-      "CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)",
-    ),
-    DB.prepare(
-      "CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)",
-    ),
-  ]);
+    ).run();
+    try {
+      await DB.prepare(
+        "CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)",
+      ).run();
+    } catch {}
+    try {
+      await DB.prepare(
+        "CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires_at)",
+      ).run();
+    } catch {}
+  } catch (err) {
+    console.error("ensureAuthSchema error", err);
+  }
 }
 
 export async function hashPassword(password: string, saltHex: string) {
