@@ -1,0 +1,243 @@
+.login-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at top, #dcecff 0, #f5f8fc 48%);
+}
+.login-page form {
+  width: min(410px, 100%);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 34px;
+  box-shadow: 0 24px 60px #0b315522;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.login-brand {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 22px;
+}
+.login-page em {
+  font-style: normal;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+}
+.login-page h1 {
+  margin: -5px 0 0;
+  font-size: 29px;
+}
+.login-page p {
+  margin: -6px 0 5px;
+  color: var(--muted);
+}
+.login-page label,
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.login-page input,
+.admin-form input,
+.admin-form select {
+  height: 43px;
+  border: 1px solid #cbd8e5;
+  border-radius: 7px;
+  padding: 0 11px;
+  outline: 0;
+  background: #fff;
+}
+.login-page input:focus,
+.admin-form input:focus,
+.admin-form select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px #1672f31d;
+}
+.login-page button {
+  height: 44px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 750;
+}
+.login-page button:disabled {
+  opacity: 0.55;
+}
+.login-page small {
+  text-align: center;
+  color: var(--muted);
+}
+.login-error,
+.admin-message {
+  padding: 10px 11px;
+  border-radius: 6px;
+  background: #fff0f0;
+  color: #be2e2e;
+  font-size: 12px;
+}
+.admin-message.success {
+  background: #eaf8ef;
+  color: var(--green);
+}
+.admin-settings {
+  padding-top: 28px;
+}
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 0.75fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.admin-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  box-shadow: 0 3px 10px #1b304b0a;
+  padding: 20px;
+}
+.section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+.section-heading > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.section-heading span {
+  width: 32px;
+  height: 32px;
+  border-radius: 7px;
+  background: #eaf3ff;
+  color: var(--blue);
+  display: grid;
+  place-items: center;
+}
+.section-heading h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.section-heading small {
+  color: var(--muted);
+}
+.admin-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.admin-form .admin-message,
+.admin-form > button {
+  grid-column: 1/-1;
+}
+.master-card dl {
+  margin: 0;
+}
+.master-card dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 11px 0;
+  border-bottom: 1px solid #edf1f5;
+}
+.master-card dt {
+  color: var(--muted);
+}
+.master-card dd {
+  margin: 0;
+  font-weight: 700;
+}
+.master-card dd span {
+  color: #7653d6;
+  background: #f1edff;
+  border-radius: 12px;
+  padding: 4px 8px;
+}
+.master-card > p {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin: 16px 0 0;
+}
+.user-list-card {
+  padding: 0;
+  overflow: hidden;
+}
+.user-list-card .section-heading {
+  padding: 18px 20px;
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+}
+.user-table {
+  overflow: auto;
+}
+.user-table th {
+  position: static;
+  text-align: left;
+  height: 39px;
+}
+.user-table td {
+  height: 54px;
+}
+.user-table .role,
+.account-active,
+.account-locked {
+  display: inline-flex;
+  padding: 5px 8px;
+  border-radius: 13px;
+  font-size: 10px;
+  font-weight: 750;
+}
+.user-table .role.master {
+  background: #f1edff;
+  color: #7653d6;
+}
+.user-table .role.admin {
+  background: #eaf3ff;
+  color: var(--blue);
+}
+.user-table .role.user {
+  background: #f0f3f6;
+  color: #52657a;
+}
+.account-active {
+  background: #eaf8ef;
+  color: var(--green);
+}
+.account-locked {
+  background: #fff0f0;
+  color: #c52c2c;
+}
+.user-table button {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fff;
+  color: #36506c;
+}
+@media (max-width: 850px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+  .admin-form {
+    grid-template-columns: 1fr;
+  }
+  .admin-form .admin-message,
+  .admin-form > button {
+    grid-column: auto;
+  }
+}
