@@ -4,13 +4,17 @@
   "main": "worker/index.ts",
   "compatibility_date": "2026-07-31",
   "compatibility_flags": ["nodejs_compat"],
+  "keep_vars": true,
   "vars": {
-    "MASTER_ADMIN_ID": "bosmile"
+    "MASTER_ADMIN_ID": "bosmile",
+    "CF_AI_GATEWAY_ID": "gemini-gateway",
+    "VERTEX_AI_LOCATION": "global",
+    "VERTEX_AI_MODEL": "gemini-3.5-flash"
   },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "mua-hang-db",
-    "database_id": "THAY_DATABASE_ID_TAI_DAY",
+    "database_id": "b9758dfb-ea50-4534-8372-7798ec7fb9e6",
     "migrations_dir": "drizzle"
   }],
   "r2_buckets": [{
